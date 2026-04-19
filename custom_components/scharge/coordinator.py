@@ -211,9 +211,10 @@ class SchargeCoordinator:
         _LOGGER.info("WS connect from %s path=%s subprotocol=%s",
                      peer, path, websocket.subprotocol)
 
-        # Pokud už máme aktivní session, starou zahodíme
+        # Pokud už máme aktivní session, starou zahodíme.
+        # DEBUG úroveň — reconnect je normální chování wallboxu (každých ~10-15 min).
         if self._ws is not None and self._ws is not websocket:
-            _LOGGER.warning("Overwriting existing WS session")
+            _LOGGER.debug("Overwriting existing WS session (normal reconnect)")
 
         self._ws = websocket
         self.connected = True
