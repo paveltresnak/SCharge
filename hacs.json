@@ -1,0 +1,5 @@
+{
+    "name": "S-charge Wallbox",
+    "render_readme": true,
+    "domains": ["sensor", "binary_sensor", "number", "button"]
+}
