@@ -67,6 +67,7 @@ def _connector_sensors(which: str, label: str) -> list[SchargeSensorDescription]
         ),
         SchargeSensorDescription(
             key=f"c_{which}_current",
+            translation_key=f"c_{which}_current",
             name=f"{label} Current",
             native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
             device_class=SensorDeviceClass.CURRENT,
@@ -76,6 +77,7 @@ def _connector_sensors(which: str, label: str) -> list[SchargeSensorDescription]
         ),
         SchargeSensorDescription(
             key=f"c_{which}_power",
+            translation_key=f"c_{which}_power",
             name=f"{label} Power",
             native_unit_of_measurement=UnitOfPower.WATT,
             device_class=SensorDeviceClass.POWER,
@@ -85,6 +87,7 @@ def _connector_sensors(which: str, label: str) -> list[SchargeSensorDescription]
         ),
         SchargeSensorDescription(
             key=f"c_{which}_energy",
+            translation_key=f"c_{which}_energy",
             name=f"{label} Energy (session)",
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             device_class=SensorDeviceClass.ENERGY,
@@ -94,12 +97,14 @@ def _connector_sensors(which: str, label: str) -> list[SchargeSensorDescription]
         ),
         SchargeSensorDescription(
             key=f"c_{which}_charging_time",
+            translation_key=f"c_{which}_charging_time",
             name=f"{label} Charging time",
             entity_category=EntityCategory.DIAGNOSTIC,
             value_fn=lambda c, w=which: _connector(c, w, "charging_time"),
         ),
         SchargeSensorDescription(
             key=f"c_{which}_status",
+            translation_key=f"c_{which}_status",
             name=f"{label} Status",
             value_fn=lambda c, w=which: _connector(c, w, "charge_status"),
         ),
@@ -112,6 +117,7 @@ SENSORS: list[SchargeSensorDescription] = [
     # Meter (external MID if present)
     SchargeSensorDescription(
         key="meter_voltage",
+        translation_key="meter_voltage",
         name="Meter Voltage",
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
@@ -121,6 +127,7 @@ SENSORS: list[SchargeSensorDescription] = [
     ),
     SchargeSensorDescription(
         key="meter_current",
+        translation_key="meter_current",
         name="Meter Current",
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         device_class=SensorDeviceClass.CURRENT,
@@ -130,6 +137,7 @@ SENSORS: list[SchargeSensorDescription] = [
     ),
     SchargeSensorDescription(
         key="meter_power",
+        translation_key="meter_power",
         name="Meter Power",
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
@@ -140,6 +148,7 @@ SENSORS: list[SchargeSensorDescription] = [
     # Globální
     SchargeSensorDescription(
         key="loadbalance",
+        translation_key="loadbalance",
         name="Load balance",
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
@@ -148,6 +157,7 @@ SENSORS: list[SchargeSensorDescription] = [
     ),
     SchargeSensorDescription(
         key="total_power",
+        translation_key="total_power",
         name="Lifetime energy",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
@@ -157,6 +167,7 @@ SENSORS: list[SchargeSensorDescription] = [
     ),
     SchargeSensorDescription(
         key="charge_times",
+        translation_key="charge_times",
         name="Charging sessions",
         state_class=SensorStateClass.TOTAL_INCREASING,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -164,6 +175,7 @@ SENSORS: list[SchargeSensorDescription] = [
     ),
     SchargeSensorDescription(
         key="rssi",
+        translation_key="rssi",
         name="WiFi RSSI",
         native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
@@ -173,12 +185,14 @@ SENSORS: list[SchargeSensorDescription] = [
     ),
     SchargeSensorDescription(
         key="sw_version",
+        translation_key="sw_version",
         name="Firmware version",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda c: c.device_data.s_version if c.device_data else None,
     ),
     SchargeSensorDescription(
         key="evse_type",
+        translation_key="evse_type",
         name="EVSE type",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda c: c.device_data.evse_type if c.device_data else None,

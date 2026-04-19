@@ -23,10 +23,54 @@
         }
     },
     "entity": {
+        "sensor": {
+            "c_1_voltage": {"name": "Connector 1 Voltage"},
+            "c_1_current": {"name": "Connector 1 Current"},
+            "c_1_power": {"name": "Connector 1 Power"},
+            "c_1_energy": {"name": "Connector 1 Energy (session)"},
+            "c_1_charging_time": {"name": "Connector 1 Charging time"},
+            "c_1_status": {"name": "Connector 1 Status"},
+            "c_2_voltage": {"name": "Connector 2 Voltage"},
+            "c_2_current": {"name": "Connector 2 Current"},
+            "c_2_power": {"name": "Connector 2 Power"},
+            "c_2_energy": {"name": "Connector 2 Energy (session)"},
+            "c_2_charging_time": {"name": "Connector 2 Charging time"},
+            "c_2_status": {"name": "Connector 2 Status"},
+            "meter_voltage": {"name": "Meter Voltage"},
+            "meter_current": {"name": "Meter Current"},
+            "meter_power": {"name": "Meter Power"},
+            "loadbalance": {"name": "Load balance (current)"},
+            "total_power": {"name": "Lifetime energy"},
+            "charge_times": {"name": "Charging sessions"},
+            "rssi": {"name": "Wi-Fi signal"},
+            "sw_version": {"name": "Firmware version"},
+            "evse_type": {"name": "EVSE type"}
+        },
+        "binary_sensor": {
+            "c_1_connected": {"name": "Connector 1 Connected"},
+            "c_1_lock": {"name": "Connector 1 Lock"},
+            "c_1_pnc": {"name": "Connector 1 Plug-and-Charge"},
+            "c_2_connected": {"name": "Connector 2 Connected"},
+            "c_2_lock": {"name": "Connector 2 Lock"},
+            "c_2_pnc": {"name": "Connector 2 Plug-and-Charge"},
+            "nwire_exist": {"name": "N-Wire exists"},
+            "nwire_closed": {"name": "N-Wire closed"}
+        },
+        "button": {
+            "c_1_lock": {"name": "Connector 1 - Lock"},
+            "c_1_unlock": {"name": "Connector 1 - Unlock"},
+            "c_1_pnc_open": {"name": "Connector 1 - PnC open"},
+            "c_1_pnc_close": {"name": "Connector 1 - PnC close"},
+            "c_2_lock": {"name": "Connector 2 - Lock"},
+            "c_2_unlock": {"name": "Connector 2 - Unlock"},
+            "c_2_pnc_open": {"name": "Connector 2 - PnC open"},
+            "c_2_pnc_close": {"name": "Connector 2 - PnC close"}
+        },
+        "number": {
+            "loadbalance_set": {"name": "Load balance"}
+        },
         "switch": {
-            "bridge": {
-                "name": "Bridge"
-            }
+            "bridge": {"name": "Bridge"}
         }
     }
 }

@@ -1,7 +1,7 @@
 {
     "domain": "scharge",
     "name": "S-charge Wallbox",
-    "version": "0.4.0",
+    "version": "0.4.1",
     "documentation": "https://github.com/paveltresnak/SCharge",
     "issue_tracker": "https://github.com/paveltresnak/SCharge/issues",
     "dependencies": [],

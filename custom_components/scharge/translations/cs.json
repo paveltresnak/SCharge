@@ -23,10 +23,54 @@
         }
     },
     "entity": {
+        "sensor": {
+            "c_1_voltage": {"name": "Konektor 1 napětí"},
+            "c_1_current": {"name": "Konektor 1 proud"},
+            "c_1_power": {"name": "Konektor 1 výkon"},
+            "c_1_energy": {"name": "Konektor 1 energie (session)"},
+            "c_1_charging_time": {"name": "Konektor 1 čas nabíjení"},
+            "c_1_status": {"name": "Konektor 1 stav"},
+            "c_2_voltage": {"name": "Konektor 2 napětí"},
+            "c_2_current": {"name": "Konektor 2 proud"},
+            "c_2_power": {"name": "Konektor 2 výkon"},
+            "c_2_energy": {"name": "Konektor 2 energie (session)"},
+            "c_2_charging_time": {"name": "Konektor 2 čas nabíjení"},
+            "c_2_status": {"name": "Konektor 2 stav"},
+            "meter_voltage": {"name": "Měřák napětí"},
+            "meter_current": {"name": "Měřák proud"},
+            "meter_power": {"name": "Měřák výkon"},
+            "loadbalance": {"name": "Omezení výkonu (aktuální)"},
+            "total_power": {"name": "Kumulativní energie"},
+            "charge_times": {"name": "Počet session"},
+            "rssi": {"name": "Wi-Fi signál"},
+            "sw_version": {"name": "Verze firmware"},
+            "evse_type": {"name": "Typ zařízení"}
+        },
+        "binary_sensor": {
+            "c_1_connected": {"name": "Konektor 1 připojeno"},
+            "c_1_lock": {"name": "Konektor 1 zámek"},
+            "c_1_pnc": {"name": "Konektor 1 Plug-and-Charge"},
+            "c_2_connected": {"name": "Konektor 2 připojeno"},
+            "c_2_lock": {"name": "Konektor 2 zámek"},
+            "c_2_pnc": {"name": "Konektor 2 Plug-and-Charge"},
+            "nwire_exist": {"name": "N-Wire existuje"},
+            "nwire_closed": {"name": "N-Wire sepnuto"}
+        },
+        "button": {
+            "c_1_lock": {"name": "Konektor 1 - Zamknout"},
+            "c_1_unlock": {"name": "Konektor 1 - Odemknout"},
+            "c_1_pnc_open": {"name": "Konektor 1 - PnC otevřít"},
+            "c_1_pnc_close": {"name": "Konektor 1 - PnC zavřít"},
+            "c_2_lock": {"name": "Konektor 2 - Zamknout"},
+            "c_2_unlock": {"name": "Konektor 2 - Odemknout"},
+            "c_2_pnc_open": {"name": "Konektor 2 - PnC otevřít"},
+            "c_2_pnc_close": {"name": "Konektor 2 - PnC zavřít"}
+        },
+        "number": {
+            "loadbalance_set": {"name": "Omezení výkonu"}
+        },
         "switch": {
-            "bridge": {
-                "name": "Můstek HA"
-            }
+            "bridge": {"name": "Můstek HA"}
         }
     }
 }

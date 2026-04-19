@@ -44,10 +44,11 @@ class SchargeLoadBalance(SchargeEntity, NumberEntity):
     _attr_device_class = NumberDeviceClass.POWER
     _attr_mode = NumberMode.SLIDER
 
+    _attr_translation_key = "loadbalance_set"
+
     def __init__(self, coordinator: SchargeCoordinator) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.serial}_loadbalance_set"
-        self._attr_name = "Load balance"
         self._attr_icon = "mdi:speedometer"
 
     @property
