@@ -92,6 +92,11 @@ class SchargeCoordinator:
         self._ws_server_task: asyncio.Task | None = None
         self._broadcast_task: asyncio.Task | None = None
 
+        # Bridge enabled — když False, HA drží krok stranou a nechá WS session
+        # pro mobilní aplikaci (UDP broadcast zastaven + aktivní WS zavřen).
+        # WS server zůstává poslouchat, aby šlo obnovit bez restart integrace.
+        self._bridge_enabled: bool = True
+
         # ProtocolState pro správu uniqueId a state tracking
         self._proto = ProtocolState(charge_box_sn=serial, user_id="1")
 
@@ -113,23 +118,72 @@ class SchargeCoordinator:
         )
         _LOGGER.info("WS server listening on 0.0.0.0:%d", self.ws_port)
 
-        # UDP broadcast loop
-        self._broadcast_task = self.hass.async_create_background_task(
-            self._broadcast_loop(),
-            name=f"{DOMAIN}_broadcast_{self.entry_id}",
-        )
+        # UDP broadcast loop (jen pokud je bridge zapnutý)
+        if self._bridge_enabled:
+            self._start_broadcast_task()
+
+    # ─── Bridge enable/disable (pro sdílení wallboxu s mobilní app) ─────────
+
+    @property
+    def bridge_enabled(self) -> bool:
+        return self._bridge_enabled
+
+    def _start_broadcast_task(self) -> None:
+        """Internal: spustit broadcast task, pokud neběží."""
+        if self._broadcast_task is None or self._broadcast_task.done():
+            self._broadcast_task = self.hass.async_create_background_task(
+                self._broadcast_loop(),
+                name=f"{DOMAIN}_broadcast_{self.entry_id}",
+            )
+
+    async def _stop_broadcast_task(self) -> None:
+        """Internal: zastavit broadcast task, pokud běží."""
+        if self._broadcast_task and not self._broadcast_task.done():
+            self._broadcast_task.cancel()
+            try:
+                await self._broadcast_task
+            except asyncio.CancelledError:
+                pass
+        self._broadcast_task = None
+
+    async def pause_bridge(self) -> None:
+        """Uvolnit wallbox pro mobilní aplikaci.
+
+        Zastaví UDP broadcast a zavře aktivní WS — wallbox se odpojí a další
+        UDP broadcast z mobilní app bude akceptován. WS server HA zůstává
+        poslouchat, takže po resume_bridge() stačí obnovit broadcast a wallbox
+        se sám vrátí zpět do HA.
+        """
+        if not self._bridge_enabled:
+            return
+        _LOGGER.info("Bridge paused — releasing wallbox for mobile app")
+        self._bridge_enabled = False
+        await self._stop_broadcast_task()
+        if self._ws is not None:
+            try:
+                await asyncio.wait_for(self._ws.close(), timeout=2)
+            except (asyncio.TimeoutError, Exception) as e:
+                _LOGGER.debug("WS close timed out during bridge pause: %s", e)
+            self._ws = None
+        self.connected = False
+        self._notify_entities()
+
+    async def resume_bridge(self) -> None:
+        """Obnovit HA ↔ wallbox spojení po pause_bridge()."""
+        if self._bridge_enabled:
+            return
+        _LOGGER.info("Bridge resumed — restarting UDP broadcast discovery")
+        self._bridge_enabled = True
+        self._start_broadcast_task()
+        # WS connect nás najde sám přes další broadcast cyklus (3 s)
+        self._notify_entities()
 
     async def async_stop(self) -> None:
         """Zastavit vše. Must not block indefinitely — wallbox often doesn't
         close WS gracefully, so we use timeouts."""
         _LOGGER.info("Stopping SchargeCoordinator")
         # 1. Cancel UDP broadcast first
-        if self._broadcast_task:
-            self._broadcast_task.cancel()
-            try:
-                await self._broadcast_task
-            except asyncio.CancelledError:
-                pass
+        await self._stop_broadcast_task()
         # 2. Close active WS connection (unblocks wait_closed below)
         if self._ws is not None:
             try:

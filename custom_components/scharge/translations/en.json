@@ -21,5 +21,12 @@
         "abort": {
             "already_configured": "This wallbox is already configured."
         }
+    },
+    "entity": {
+        "switch": {
+            "bridge": {
+                "name": "Bridge"
+            }
+        }
     }
 }

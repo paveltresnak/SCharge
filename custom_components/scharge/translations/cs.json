@@ -21,5 +21,12 @@
         "abort": {
             "already_configured": "Tento wallbox je již nakonfigurován."
         }
+    },
+    "entity": {
+        "switch": {
+            "bridge": {
+                "name": "Můstek HA"
+            }
+        }
     }
 }

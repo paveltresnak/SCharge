@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] — 2026-04-19
+
+### Added
+- **Bridge switch** (`switch.wallbox_s_charge_bridge`) — umožňuje dočasně uvolnit wallbox pro mobilní aplikaci S-charge.
+  Wallbox drží jen jednu aktivní WebSocket session — když je HA připojený, mobil se nepřipojí.
+  OFF → HA zastaví UDP broadcast a zavře aktivní WS. Wallbox je uvolněn pro mobilní app. Entity se přepnou na `unavailable`.
+  ON *(default)* → HA obnoví broadcast, wallbox se do ~3 s vrátí zpět k HA.
+  Switch je v kategorii CONFIG (zobrazuje se u konfiguračních entit integrace).
+
 ## [0.3.1] — 2026-04-19
 
 ### Fixed
