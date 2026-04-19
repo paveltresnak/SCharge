@@ -54,7 +54,7 @@ BINARY_SENSORS: list[SchargeBinarySensorDescription] = [
         key="c_1_lock",
         name="Connector 1 Lock",
         device_class=BinarySensorDeviceClass.LOCK,
-        value_fn=lambda c: _connector_n(c, 1, "lock_status"),
+        value_fn=lambda c: (not _connector_n(c, 1, "lock_status")) if _connector_n(c, 1, "lock_status") is not None else None,
     ),
     SchargeBinarySensorDescription(
         key="c_1_pnc",
@@ -72,7 +72,7 @@ BINARY_SENSORS: list[SchargeBinarySensorDescription] = [
         key="c_2_lock",
         name="Connector 2 Lock",
         device_class=BinarySensorDeviceClass.LOCK,
-        value_fn=lambda c: _connector_n(c, 2, "lock_status"),
+        value_fn=lambda c: (not _connector_n(c, 2, "lock_status")) if _connector_n(c, 2, "lock_status") is not None else None,
     ),
     SchargeBinarySensorDescription(
         key="c_2_pnc",
