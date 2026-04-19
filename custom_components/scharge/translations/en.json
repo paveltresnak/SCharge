@@ -1,0 +1,25 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "S-charge Wallbox",
+                "description": "Add a Joint Tech / Schlieger S-charge wallbox. The integration runs a WebSocket server; the wallbox connects after receiving UDP discovery broadcast.",
+                "data": {
+                    "host": "Wallbox IP address (e.g. 192.168.78.100)",
+                    "serial": "Wallbox serial number (chargeBoxSN)",
+                    "ws_port": "WebSocket listener port",
+                    "broadcast_addr": "Broadcast address (default 255.255.255.255)",
+                    "broadcast_port": "UDP discovery port (default 3050)"
+                }
+            }
+        },
+        "error": {
+            "invalid_ip": "Invalid IP address",
+            "invalid_serial": "Invalid serial number",
+            "unreachable": "Wallbox not reachable at this address"
+        },
+        "abort": {
+            "already_configured": "This wallbox is already configured."
+        }
+    }
+}

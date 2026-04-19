@@ -1,0 +1,25 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "S-charge Wallbox",
+                "description": "Přidejte Wallbox Joint Tech / Schlieger S-charge. Integrace běží jako WebSocket server; wallbox sám navazuje spojení po UDP discovery broadcastu.",
+                "data": {
+                    "host": "IP adresa wallboxu (např. 192.168.78.100)",
+                    "serial": "Sériové číslo wallboxu (chargeBoxSN)",
+                    "ws_port": "Port pro WebSocket listener",
+                    "broadcast_addr": "Broadcast adresa (výchozí 255.255.255.255)",
+                    "broadcast_port": "UDP port pro discovery (výchozí 3050)"
+                }
+            }
+        },
+        "error": {
+            "invalid_ip": "Neplatná IP adresa",
+            "invalid_serial": "Neplatné sériové číslo",
+            "unreachable": "Wallbox není dostupný na této adrese"
+        },
+        "abort": {
+            "already_configured": "Tento wallbox je již nakonfigurován."
+        }
+    }
+}
