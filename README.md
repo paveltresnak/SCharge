@@ -57,26 +57,35 @@ z HA strany. Není potřeba žádný cloud, BLE ani externí hardware.
 
 ## Poskytované entity
 
-### Sensors (per konektor Main + Vice)
+### Sensors (per konektor 1 + 2)
+
+Wallbox má 2 zásuvky (konektory). V wire protokolu (JSON) jsou označené
+`connectorMain` / `connectorVice`, ale v UI (entity IDs, display názvy) používáme
+čísla `1` / `2` podle pořadí fyzických zásuvek na zařízení.
 
 | Entity | Jednotka | Popis |
 |---|---|---|
-| `sensor.scharge_main_voltage` | V | Napětí |
-| `sensor.scharge_main_current` | A | Proud |
-| `sensor.scharge_main_power` | W | Okamžitý výkon |
-| `sensor.scharge_main_energy` | kWh | Energie session |
-| `sensor.scharge_main_charging_time` | text | Čas nabíjení (H:M:S) |
-| `sensor.scharge_main_status` | text | idle / charging / ... |
+| `sensor.scharge_1_voltage` | V | Napětí konektor 1 |
+| `sensor.scharge_1_current` | A | Proud konektor 1 |
+| `sensor.scharge_1_power` | W | Okamžitý výkon konektor 1 |
+| `sensor.scharge_1_energy_session` | kWh | Energie aktuální session |
+| `sensor.scharge_1_charging_time` | text | Čas nabíjení (H:M:S) |
+| `sensor.scharge_1_status` | text | idle / charging / ... |
 
-Pro **Vice** konektor to samé.
+Pro **konektor 2** to samé (`sensor.scharge_2_voltage`, ...).
 
 ### Binary sensors
 
 | Entity | Popis |
 |---|---|
-| `binary_sensor.scharge_main_connected` | Auto je připojené |
-| `binary_sensor.scharge_main_lock` | Elektronický zámek konektoru |
-| `binary_sensor.scharge_main_pnc` | Plug-and-Charge stav |
+| `binary_sensor.scharge_1_connected` | Auto je připojené (konektor 1) |
+| `binary_sensor.scharge_1_lock` | Elektronický zámek konektoru 1 |
+| `binary_sensor.scharge_1_pnc` | Plug-and-Charge stav (konektor 1) |
+| `binary_sensor.scharge_2_connected` | Auto je připojené (konektor 2) |
+| `binary_sensor.scharge_2_lock` | Elektronický zámek konektoru 2 |
+| `binary_sensor.scharge_2_pnc` | Plug-and-Charge stav (konektor 2) |
+| `binary_sensor.scharge_nwire_exist` | N-Wire detekován (diagnostika) |
+| `binary_sensor.scharge_nwire_closed` | N-Wire relé sepnuto (diagnostika) |
 
 ### Globální sensors
 
@@ -85,8 +94,12 @@ Pro **Vice** konektor to samé.
 | `sensor.scharge_loadbalance` | W | Aktuální max výkon |
 | `sensor.scharge_total_power` | kWh | Kumulativní energie |
 | `sensor.scharge_charge_times` | count | Počet session |
+| `sensor.scharge_meter_voltage` | V | Napětí externího MID metru (pokud je) |
+| `sensor.scharge_meter_current` | A | Proud externího MID metru |
+| `sensor.scharge_meter_power` | W | Výkon externího MID metru |
 | `sensor.scharge_rssi` | dBm | WiFi signál wallboxu |
 | `sensor.scharge_sw_version` | text | Firmware verze |
+| `sensor.scharge_evse_type` | text | Model / typ wallboxu |
 
 ### Number (ovládání)
 
@@ -98,11 +111,14 @@ Pro **Vice** konektor to samé.
 
 | Entity | Akce |
 |---|---|
-| `button.scharge_main_lock_btn` | Zamknout konektor 1 |
-| `button.scharge_main_unlock_btn` | Odemknout konektor 1 |
-| `button.scharge_main_pnc_open_btn` | Plug-and-Charge OPEN (bez auth) |
-| `button.scharge_main_pnc_close_btn` | Plug-and-Charge CLOSE (auth required) |
-| (stejné pro Vice konektor) | |
+| `button.scharge_1_lock_btn` | Zamknout konektor 1 |
+| `button.scharge_1_unlock_btn` | Odemknout konektor 1 |
+| `button.scharge_1_pnc_open_btn` | Plug-and-Charge OPEN — konektor 1 (bez auth) |
+| `button.scharge_1_pnc_close_btn` | Plug-and-Charge CLOSE — konektor 1 (auth required) |
+| `button.scharge_2_lock_btn` | Zamknout konektor 2 |
+| `button.scharge_2_unlock_btn` | Odemknout konektor 2 |
+| `button.scharge_2_pnc_open_btn` | Plug-and-Charge OPEN — konektor 2 |
+| `button.scharge_2_pnc_close_btn` | Plug-and-Charge CLOSE — konektor 2 |
 
 ## Automatizace — PV-driven modulace
 
@@ -115,7 +131,7 @@ Základní automatizace pro modulaci nabíjecího výkonu dle solárního přeby
       seconds: /30
   condition:
     - condition: state
-      entity_id: binary_sensor.scharge_main_connected
+      entity_id: binary_sensor.scharge_1_connected
       state: "on"
   action:
     - variables:
@@ -136,15 +152,7 @@ Základní automatizace pro modulaci nabíjecího výkonu dle solárního přeby
 
 ## Changelog
 
-### 0.1.0 (2026-04-19)
-
-- První release
-- Protokol WebSocket + `ocpp1.6` + JSON envelope (reverse-engineered)
-- Sensor entities (voltage, current, power, energy, charging time, status)
-- Binary sensors (connected, lock, pnc)
-- Number entity pro LoadBalance
-- Buttons pro Lock/Unlock/PnC open/close
-- Config flow přes UI, české + anglické překlady
+Kompletní historie změn: viz [CHANGELOG.md](CHANGELOG.md).
 
 ## Licence
 

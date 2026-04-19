@@ -35,9 +35,9 @@ class SchargeSensorDescription(SensorEntityDescription):
     value_fn: Callable[[SchargeCoordinator], Any] = lambda _: None
 
 
-def _connector(coord: SchargeCoordinator, which: str, field: str) -> Any:
+def _connector(coord: SchargeCoordinator, which, field: str) -> Any:
     """Helper: získat pole z SynchroData nebo SynchroStatus."""
-    if which == "main":
+    if which == 1:
         sd = coord.synchro_data.connector_main if coord.synchro_data else None
         ss = coord.synchro_status.connector_main if coord.synchro_status else None
     else:
@@ -107,8 +107,8 @@ def _connector_sensors(which: str, label: str) -> list[SchargeSensorDescription]
 
 
 SENSORS: list[SchargeSensorDescription] = [
-    *_connector_sensors("main", "Main"),
-    *_connector_sensors("vice", "Vice"),
+    *_connector_sensors(1, "Connector 1"),
+    *_connector_sensors(2, "Connector 2"),
     # Meter (external MID if present)
     SchargeSensorDescription(
         key="meter_voltage",

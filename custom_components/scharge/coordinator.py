@@ -120,18 +120,30 @@ class SchargeCoordinator:
         )
 
     async def async_stop(self) -> None:
-        """Zastavit vše."""
+        """Zastavit vše. Must not block indefinitely — wallbox often doesn't
+        close WS gracefully, so we use timeouts."""
         _LOGGER.info("Stopping SchargeCoordinator")
+        # 1. Cancel UDP broadcast first
         if self._broadcast_task:
             self._broadcast_task.cancel()
             try:
                 await self._broadcast_task
             except asyncio.CancelledError:
                 pass
+        # 2. Close active WS connection (unblocks wait_closed below)
+        if self._ws is not None:
+            try:
+                await asyncio.wait_for(self._ws.close(), timeout=2)
+            except (asyncio.TimeoutError, Exception) as e:
+                _LOGGER.debug("WS close timed out/failed: %s", e)
+            self._ws = None
+        # 3. Close WS server with timeout
         if self._ws_server:
             self._ws_server.close()
-            await self._ws_server.wait_closed()
-        self._ws = None
+            try:
+                await asyncio.wait_for(self._ws_server.wait_closed(), timeout=3)
+            except asyncio.TimeoutError:
+                _LOGGER.warning("WS server close timeout — forcing down")
         self.connected = False
         self._notify_entities()
 

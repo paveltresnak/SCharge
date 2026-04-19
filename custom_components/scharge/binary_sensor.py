@@ -24,58 +24,60 @@ class SchargeBinarySensorDescription(BinarySensorEntityDescription):
     value_fn: Callable[[SchargeCoordinator], bool | None] = lambda _: None
 
 
-def _connector_main(coord: SchargeCoordinator, attr: str) -> bool | None:
-    if coord.synchro_status and hasattr(coord.synchro_status.connector_main, attr):
-        return getattr(coord.synchro_status.connector_main, attr)
-    if coord.device_data and hasattr(coord.device_data.connector_main, attr):
-        return getattr(coord.device_data.connector_main, attr)
-    return None
+def _connector_n(coord: SchargeCoordinator, n: int, attr: str) -> bool | None:
+    """Read bool-ish field from connector 1 (Main) or 2 (Vice).
 
-
-def _connector_vice(coord: SchargeCoordinator, attr: str) -> bool | None:
-    if coord.synchro_status and hasattr(coord.synchro_status.connector_vice, attr):
-        return getattr(coord.synchro_status.connector_vice, attr)
-    if coord.device_data and hasattr(coord.device_data.connector_vice, attr):
-        return getattr(coord.device_data.connector_vice, attr)
+    Wallbox wire protokol stále používá connectorMain/connectorVice v JSONu,
+    ale v UI používáme čísla 1/2 podle zákazníkova přání.
+    """
+    if n == 1:
+        ss = coord.synchro_status.connector_main if coord.synchro_status else None
+        dd = coord.device_data.connector_main if coord.device_data else None
+    else:
+        ss = coord.synchro_status.connector_vice if coord.synchro_status else None
+        dd = coord.device_data.connector_vice if coord.device_data else None
+    for src in (ss, dd):
+        if src is not None and hasattr(src, attr):
+            return getattr(src, attr)
     return None
 
 
 BINARY_SENSORS: list[SchargeBinarySensorDescription] = [
     # Main connector
     SchargeBinarySensorDescription(
-        key="c_main_connected",
-        name="Main Connected",
+        key="c_1_connected",
+        name="Connector 1 Connected",
         device_class=BinarySensorDeviceClass.PLUG,
-        value_fn=lambda c: _connector_main(c, "connection_status"),
+        value_fn=lambda c: _connector_n(c, 1, "connection_status"),
     ),
     SchargeBinarySensorDescription(
-        key="c_main_lock",
-        name="Main Lock",
+        key="c_1_lock",
+        name="Connector 1 Lock",
         device_class=BinarySensorDeviceClass.LOCK,
-        value_fn=lambda c: _connector_main(c, "lock_status"),
+        value_fn=lambda c: _connector_n(c, 1, "lock_status"),
     ),
     SchargeBinarySensorDescription(
-        key="c_main_pnc",
-        name="Main PnC",
-        value_fn=lambda c: _connector_main(c, "pnc_status"),
+        key="c_1_pnc",
+        name="Connector 1 PnC",
+        value_fn=lambda c: _connector_n(c, 1, "pnc_status"),
     ),
     # Vice connector
     SchargeBinarySensorDescription(
-        key="c_vice_connected",
-        name="Vice Connected",
+        key="c_2_connected",
+        name="Connector 2 Connected",
         device_class=BinarySensorDeviceClass.PLUG,
-        value_fn=lambda c: _connector_vice(c, "connection_status"),
+        value_fn=lambda c: _connector_n(c, 2, "connection_status"),
     ),
     SchargeBinarySensorDescription(
-        key="c_vice_lock",
-        name="Vice Lock",
+        key="c_2_lock",
+        name="Connector 2 Lock",
         device_class=BinarySensorDeviceClass.LOCK,
-        value_fn=lambda c: _connector_vice(c, "lock_status"),
+        value_fn=lambda c: _connector_n(c, 2, "lock_status"),
     ),
     SchargeBinarySensorDescription(
-        key="c_vice_pnc",
-        name="Vice PnC",
-        value_fn=lambda c: _connector_vice(c, "pnc_status"),
+        key="c_2_pnc",
+        name="Connector 2 PnC",
+        value_fn=lambda c: _connector_n(c, 2, "pnc_status"),
     ),
     # NWire
     SchargeBinarySensorDescription(

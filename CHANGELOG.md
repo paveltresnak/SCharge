@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] — 2026-04-19
+
+### ⚠️ Breaking changes
+- **Konektory přejmenovány `main`/`vice` → `1`/`2`.** Všechny entity IDs změněny:
+  - `sensor.scharge_main_*` → `sensor.scharge_1_*`
+  - `sensor.scharge_vice_*` → `sensor.scharge_2_*`
+  - Stejně pro `binary_sensor.*`, `button.*`.
+- Display názvy: `Main Voltage` → `Connector 1 Voltage` atd.
+- Pokud máš automation odkazující na staré entity IDs, bude je potřeba přemapovat.
+- Wire protokol (`connectorMain`/`connectorVice` v JSONu wallboxu) zůstává beze změny — jen UI názvy.
+
+### Fixed
+- **Kritický bug:** `coordinator.async_stop` čekal infinite na `ws_server.wait_closed()`,
+  protože wallbox nezavírá WS graceful. Teď má timeout 3 s na server close +
+  2 s na active WS close. Bez fixu bylo reload/unload integrace nemožné.
+- `README.md`: odstraněn inline changelog block (duplicita s CHANGELOG.md).
+  README nyní odkazuje na CHANGELOG.md.
+
 ## [0.2.0] — 2026-04-19
 
 ### Changed
