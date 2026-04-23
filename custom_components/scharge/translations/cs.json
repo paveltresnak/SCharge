@@ -67,7 +67,9 @@
             "c_2_pnc_close": {"name": "Konektor 2 - PnC zavřít"}
         },
         "number": {
-            "loadbalance_set": {"name": "Omezení výkonu"}
+            "loadbalance_set": {"name": "Omezení výkonu"},
+            "c_1_charge_current": {"name": "Konektor 1 - nabíjecí proud"},
+            "c_2_charge_current": {"name": "Konektor 2 - nabíjecí proud"}
         },
         "switch": {
             "bridge": {"name": "Můstek HA"}

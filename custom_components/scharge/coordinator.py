@@ -39,6 +39,7 @@ from .actions import (
     SynchroStatus,
     NWireToDics,
     decode_payload,
+    make_authorize,
     make_electronic_lock,
     make_load_balance,
     make_pnc_set,
@@ -372,6 +373,18 @@ class SchargeCoordinator:
         if ok:
             self.last_loadbalance_set = watts
         return ok
+
+    async def send_authorize(self, connector_id: int, purpose: str, current: int) -> bool:
+        """Start/Stop charging session at given current (A).
+
+        Calling Start during active charging re-authorizes the session with a new
+        current limit — this is how we throttle per-connector amperage for
+        PV-driven modulation (more granular than building-level LoadBalance).
+        """
+        msg = make_authorize(self._proto, connector_id, purpose, current)
+        _LOGGER.info("TX Authorize(c=%d, %s, %d A) uid=%s",
+                     connector_id, purpose, current, msg.unique_id)
+        return await self._send_message(msg)
 
     async def send_electronic_lock(self, connector_id: int, purpose: str) -> bool:
         """Lock/unlock electronic latch na konektoru."""

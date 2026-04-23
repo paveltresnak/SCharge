@@ -67,7 +67,9 @@
             "c_2_pnc_close": {"name": "Connector 2 - PnC close"}
         },
         "number": {
-            "loadbalance_set": {"name": "Load balance"}
+            "loadbalance_set": {"name": "Load balance"},
+            "c_1_charge_current": {"name": "Connector 1 - Charging current"},
+            "c_2_charge_current": {"name": "Connector 2 - Charging current"}
         },
         "switch": {
             "bridge": {"name": "Bridge"}

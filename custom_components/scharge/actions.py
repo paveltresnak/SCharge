@@ -246,6 +246,37 @@ def make_load_balance(state, value_watts):
     )
 
 
+def make_authorize(state, connector_id, purpose, current):
+    """Start/Stop charging OR change charging current on running session.
+
+    Per matemat13/ha_s-charge reverse engineering, Authorize action controls
+    per-connector charging current in Amps (6-32 A typical range). Sending
+    Authorize Start with new `current` value during active charging THROTTLES
+    the car to the new current — this is the key mechanism for PV-driven
+    modulation (more granular than LoadBalance).
+
+    ``connector_id``: 1 (Main) or 2 (Vice)
+    ``purpose``: "Start" or "Stop"
+    ``current``: target amps (min 6, max 32 per protocol)
+    """
+    if purpose not in ("Start", "Stop"):
+        raise ValueError("purpose must be 'Start' or 'Stop'")
+    if connector_id not in (1, 2):
+        raise ValueError("connector_id must be 1 or 2")
+    return Message(
+        message_type_id="5",
+        unique_id=state.next_unique_id(),
+        action="Authorize",
+        payload={
+            "userId": state.user_id,
+            "chargeBoxSN": state.charge_box_sn,
+            "purpose": purpose,
+            "current": int(current),
+            "connectorId": connector_id,
+        },
+    )
+
+
 def make_electronic_lock(state, connector_id, purpose):
     """Lock/unlock a connector's electronic latch.
 
