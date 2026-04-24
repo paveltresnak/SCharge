@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.4] — 2026-04-24
+
+### Fixed
+- **Výkon konektoru zobrazován ve W místo kW** — HA s `native_unit=KILO_WATT` bez explicitního `suggested_unit_of_measurement` auto-konvertuje na W pro malé hodnoty. `states()` pak vracelo W hodnotu (4010), šablona zobrazovala „4010.0 kW" a entity karta „4 010 W".
+- **Fix:** Přidáno `suggested_unit_of_measurement=UnitOfPower.KILO_WATT` pro `c_{1,2}_power` a `meter_power`. HA zachová jednotku kW → `states()` vrací „4.01", entity karta zobrazí „4.01 kW" s 2 des. místy.
+
 ## [0.5.3] — 2026-04-24
 
 ### Fixed
