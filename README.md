@@ -120,6 +120,20 @@ Pro **konektor 2** to samé (`sensor.scharge_2_voltage`, ...).
 | `button.scharge_2_pnc_open_btn` | Plug-and-Charge OPEN — konektor 2 |
 | `button.scharge_2_pnc_close_btn` | Plug-and-Charge CLOSE — konektor 2 |
 
+### Switch (sdílení s mobilní aplikací)
+
+| Entity | Stavy | Popis |
+|---|---|---|
+| `switch.wallbox_s_charge_bridge` (CS: „Můstek HA", EN: „Bridge") | `on` *(default)* / `off` | Vypni, když chceš připojit se na wallbox přes mobilní aplikaci S-charge. |
+
+**Pozadí:** Wallbox Joint Tech JNT-EVCD2 drží pouze **jednu aktivní WebSocket session**. Jakmile je HA integrace připojena, mobilní aplikace se k wallboxu nepřipojí. Bridge switch umožňuje HA na chvíli „krok stranou".
+
+**Jak funguje:**
+- **`off`** → HA zastaví UDP broadcast + zavře aktivní WS. Wallbox se uvolní, mobilní app chytí session. Entity integrace přejdou na `unavailable`.
+- **`on`** → HA obnoví UDP broadcast; wallbox se do cca 3 s vrátí zpátky k HA (pokud právě nemluví s mobilem). Entity se obnoví.
+
+Switch najdeš v **Settings → Devices & Services → S-charge Wallbox → Configuration entities** (kategorie CONFIG).
+
 ## Automatizace — PV-driven modulace
 
 Základní automatizace pro modulaci nabíjecího výkonu dle solárního přebytku:

@@ -97,10 +97,18 @@ class SchargeChargeCurrent(SchargeEntity, NumberEntity):
         self._attr_unique_id = f"{coordinator.serial}_c_{connector_id}_charge_current_set"
         self._attr_translation_key = f"c_{connector_id}_charge_current"
         self._attr_icon = "mdi:current-ac"
+        self._optimistic_value: int | None = None
 
     @property
     def native_value(self) -> float | None:
-        """Return reserveCurrent from SynchroStatus (target charging current)."""
+        """Return commanded target current.
+
+        Priority: last locally-set value (optimistic) > reserveCurrent from
+        SynchroStatus. Wallbox often doesn't echo reserveCurrent back, so
+        without optimistic tracking the state would stay at 0.
+        """
+        if self._optimistic_value is not None:
+            return self._optimistic_value
         if self.coordinator.synchro_status is None:
             return None
         src = (self.coordinator.synchro_status.connector_main if self._connector_id == 1
@@ -116,6 +124,9 @@ class SchargeChargeCurrent(SchargeEntity, NumberEntity):
                             amps, CHARGE_CURRENT_MIN, CHARGE_CURRENT_MAX)
             return
         ok = await self.coordinator.send_authorize(self._connector_id, "Start", amps)
-        if not ok:
+        if ok:
+            self._optimistic_value = amps
+            self.async_write_ha_state()
+        else:
             _LOGGER.warning("Authorize Start (c=%d, %d A) nezdařeno",
                             self._connector_id, amps)
