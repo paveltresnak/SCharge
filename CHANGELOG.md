@@ -5,10 +5,15 @@ All notable changes to this project will be documented in this file.
 Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.3] — 2026-04-24
+
+### Fixed
+- **Definitvní oprava jednotky výkonu konektoru** — wallbox posílá `power` v **kW** jako desetinné číslo (např. 3.94 kW při 5.96A × √3 × 400V × 0.95 PF ≈ 3.92 kW ✓). `native_unit_of_measurement=UnitOfPower.KILO_WATT` je správně. v0.5.2 omylem revertovalo zpět na `WATT`, entity karta pak zobrazovala „3.94 W" místo „3.94 kW" a Jinja2 šablona vracela špatnou hodnotu. Opraveno zpět na `KILO_WATT` pro `c_{1,2}_power` i `meter_power`.
+
 ## [0.5.2] — 2026-04-24
 
 ### Fixed
-- **Regrese jednotky výkonu z v0.5.1** — v0.5.1 chybně změnil `native_unit_of_measurement` z `UnitOfPower.WATT` na `UnitOfPower.KILO_WATT` pro `c_{1,2}_power` a `meter_power`. Wallbox posílá hodnoty v **Wattech** (např. 10770); HA s `WATT` automaticky konvertuje na kW pro zobrazení (`states()` vrací "10.75"). S `KILO_WATT` HA interpretoval 10770 W jako 10770 kW → šablony zobrazovaly „Wallbox: 10770.0 kW". Opraveno zpět na `UnitOfPower.WATT`. `suggested_display_precision=2` zachován (zobrazení 10.75 kW).
+- ~~**Regrese jednotky výkonu z v0.5.1**~~ — tato verze obsahovala chybu (viz v0.5.3). `suggested_display_precision=2` pro power senzory přidáno správně.
 
 ## [0.5.1] — 2026-04-24
 
