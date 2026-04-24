@@ -5,13 +5,18 @@ All notable changes to this project will be documented in this file.
 Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.2] — 2026-04-24
+
+### Fixed
+- **Regrese jednotky výkonu z v0.5.1** — v0.5.1 chybně změnil `native_unit_of_measurement` z `UnitOfPower.WATT` na `UnitOfPower.KILO_WATT` pro `c_{1,2}_power` a `meter_power`. Wallbox posílá hodnoty v **Wattech** (např. 10770); HA s `WATT` automaticky konvertuje na kW pro zobrazení (`states()` vrací "10.75"). S `KILO_WATT` HA interpretoval 10770 W jako 10770 kW → šablony zobrazovaly „Wallbox: 10770.0 kW". Opraveno zpět na `UnitOfPower.WATT`. `suggested_display_precision=2` zachován (zobrazení 10.75 kW).
+
 ## [0.5.1] — 2026-04-24
 
 ### Fixed
 - **`number.wallbox_s_charge_konektor_{1,2}_nabijeci_proud` zaseknutý na 0** — wallbox nereportuje `reserveCurrent` ve `SynchroStatus` konzistentně (často 0), takže number.native_value byla vždy 0 → zavírací smyčka s PCC feedback automatikou nefungovala (condition `target != current` byla pořád true, nic se neměnilo).
 - **Fix:** Optimistic tracking v `SchargeChargeCurrent`. Po úspěšném `Authorize Start` si entity pamatuje hodnotu lokálně (`_optimistic_value`) a vrací ji v `native_value` (fallback na `reserveCurrent` jen pokud optimistic není).
 - PCC feedback automatika teď správně konverguje bez potřeby wallboxu echo-back.
-- **Oprava jednotky výkonu konektoru** — wallbox posílá `power` v kW (ověřeno V×I×√3), ale sensor byl deklarován jako `UnitOfPower.WATT`. Opraveno na `UnitOfPower.KILO_WATT` pro `c_{1,2}_power` i `meter_power`. Precision upraven na 2 des. místa (zobrazení 10.75 kW místo 11 W).
+- **`suggested_display_precision=2`** pro `c_{1,2}_power` a `meter_power` — zobrazení na 2 des. místa (10.75 kW).
 
 ## [0.5.0] — 2026-04-23
 
