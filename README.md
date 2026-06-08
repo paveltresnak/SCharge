@@ -60,65 +60,78 @@ z HA strany. Není potřeba žádný cloud, BLE ani externí hardware.
 ### Sensors (per konektor 1 + 2)
 
 Wallbox má 2 zásuvky (konektory). V wire protokolu (JSON) jsou označené
-`connectorMain` / `connectorVice`, ale v UI (entity IDs, display názvy) používáme
+`connectorMain` / `connectorVice`, ve UI (entity IDs, display názvy) používáme
 čísla `1` / `2` podle pořadí fyzických zásuvek na zařízení.
+
+> **⚠️ Poznámka k entity_id:** prefix `wallbox_s_charge_` v příkladech níže je
+> slugifikovaný **název zařízení** zvolený při konfiguraci — u tebe může být jiný
+> (např. `s_charge_`). Část za prefixem (`connector_1_voltage`, `load_balance`, …)
+> je dána integrací. Slug může být **lokalizovaný** podle jazyka HA (CS/EN) — vždy
+> si ověř skutečné entity_id v *Developer Tools → States*.
 
 | Entity | Jednotka | Popis |
 |---|---|---|
-| `sensor.scharge_1_voltage` | V | Napětí konektor 1 |
-| `sensor.scharge_1_current` | A | Proud konektor 1 |
-| `sensor.scharge_1_power` | W | Okamžitý výkon konektor 1 |
-| `sensor.scharge_1_energy_session` | kWh | Energie aktuální session |
-| `sensor.scharge_1_charging_time` | text | Čas nabíjení (H:M:S) |
-| `sensor.scharge_1_status` | text | idle / charging / ... |
+| `sensor.wallbox_s_charge_connector_1_voltage` | V | Napětí konektor 1 |
+| `sensor.wallbox_s_charge_connector_1_current` | A | Proud konektor 1 |
+| `sensor.wallbox_s_charge_connector_1_power` | W | Okamžitý výkon konektor 1 |
+| `sensor.wallbox_s_charge_connector_1_energy_session` | kWh | Energie aktuální session |
+| `sensor.wallbox_s_charge_connector_1_charging_time` | text | Čas nabíjení (H:M:S) |
+| `sensor.wallbox_s_charge_connector_1_status` | text | idle / charging / ... |
 
-Pro **konektor 2** to samé (`sensor.scharge_2_voltage`, ...).
+Pro **konektor 2** to samé (`sensor.wallbox_s_charge_connector_2_voltage`, ...).
 
 ### Binary sensors
 
 | Entity | Popis |
 |---|---|
-| `binary_sensor.scharge_1_connected` | Auto je připojené (konektor 1) |
-| `binary_sensor.scharge_1_lock` | Elektronický zámek konektoru 1 |
-| `binary_sensor.scharge_1_pnc` | Plug-and-Charge stav (konektor 1) |
-| `binary_sensor.scharge_2_connected` | Auto je připojené (konektor 2) |
-| `binary_sensor.scharge_2_lock` | Elektronický zámek konektoru 2 |
-| `binary_sensor.scharge_2_pnc` | Plug-and-Charge stav (konektor 2) |
-| `binary_sensor.scharge_nwire_exist` | N-Wire detekován (diagnostika) |
-| `binary_sensor.scharge_nwire_closed` | N-Wire relé sepnuto (diagnostika) |
+| `binary_sensor.wallbox_s_charge_connector_1_connected` | Auto je připojené (konektor 1) |
+| `binary_sensor.wallbox_s_charge_connector_1_lock` | Elektronický zámek konektoru 1 |
+| `binary_sensor.wallbox_s_charge_connector_1_pnc` | Plug-and-Charge stav (konektor 1) |
+| `binary_sensor.wallbox_s_charge_connector_2_connected` | Auto je připojené (konektor 2) |
+| `binary_sensor.wallbox_s_charge_connector_2_lock` | Elektronický zámek konektoru 2 |
+| `binary_sensor.wallbox_s_charge_connector_2_pnc` | Plug-and-Charge stav (konektor 2) |
+| `binary_sensor.wallbox_s_charge_nwire_exist` | N-Wire detekován (diagnostika) |
+| `binary_sensor.wallbox_s_charge_nwire_closed` | N-Wire relé sepnuto (diagnostika) |
 
 ### Globální sensors
 
 | Entity | Jednotka | Popis |
 |---|---|---|
-| `sensor.scharge_loadbalance` | W | Aktuální max výkon |
-| `sensor.scharge_total_power` | kWh | Kumulativní energie |
-| `sensor.scharge_charge_times` | count | Počet session |
-| `sensor.scharge_meter_voltage` | V | Napětí externího MID metru (pokud je) |
-| `sensor.scharge_meter_current` | A | Proud externího MID metru |
-| `sensor.scharge_meter_power` | W | Výkon externího MID metru |
-| `sensor.scharge_rssi` | dBm | WiFi signál wallboxu |
-| `sensor.scharge_sw_version` | text | Firmware verze |
-| `sensor.scharge_evse_type` | text | Model / typ wallboxu |
+| `sensor.wallbox_s_charge_load_balance` | W | Aktuální max výkon (LoadBalance) |
+| `sensor.wallbox_s_charge_lifetime_energy` | kWh | Kumulativní energie |
+| `sensor.wallbox_s_charge_charging_sessions` | count | Počet session |
+| `sensor.wallbox_s_charge_meter_voltage` | V | Napětí externího MID metru (pokud je) |
+| `sensor.wallbox_s_charge_meter_current` | A | Proud externího MID metru |
+| `sensor.wallbox_s_charge_meter_power` | W | Výkon externího MID metru |
+| `sensor.wallbox_s_charge_wifi_rssi` | dBm | WiFi signál wallboxu |
+| `sensor.wallbox_s_charge_firmware_version` | text | Firmware verze |
+| `sensor.wallbox_s_charge_evse_type` | text | Model / typ wallboxu |
 
 ### Number (ovládání)
 
 | Entity | Rozsah | Popis |
 |---|---|---|
-| `number.scharge_loadbalance` | 4000–14600 W | Slider pro nastavení max výkonu (PV-driven modulace) |
+| `number.wallbox_s_charge_connector_1_charging_current` | 6–32 A | **Nabíjecí proud konektoru 1** — reálný per-session throttle (Authorize + nový proud). Toto je doporučená cesta PV modulace. |
+| `number.wallbox_s_charge_connector_2_charging_current` | 6–32 A | Nabíjecí proud konektoru 2 |
+| `number.wallbox_s_charge_load_balance` | 4000–14600 W | Globální strop výkonu (LoadBalance). Hrubší než proud, ovlivňuje oba konektory dohromady. |
+
+> **Proud (A) vs LoadBalance (W):** pro modulaci dle PV přebytku používej
+> **per-konektor `charging_current` (A)** — moduluje konkrétní probíhající session
+> jemně po 1 A. `load_balance` (W) je hrubý společný strop. Reálné nasazení
+> (regulační smyčka) jede přes ampéry.
 
 ### Buttons (ovládání)
 
 | Entity | Akce |
 |---|---|
-| `button.scharge_1_lock_btn` | Zamknout konektor 1 |
-| `button.scharge_1_unlock_btn` | Odemknout konektor 1 |
-| `button.scharge_1_pnc_open_btn` | Plug-and-Charge OPEN — konektor 1 (bez auth) |
-| `button.scharge_1_pnc_close_btn` | Plug-and-Charge CLOSE — konektor 1 (auth required) |
-| `button.scharge_2_lock_btn` | Zamknout konektor 2 |
-| `button.scharge_2_unlock_btn` | Odemknout konektor 2 |
-| `button.scharge_2_pnc_open_btn` | Plug-and-Charge OPEN — konektor 2 |
-| `button.scharge_2_pnc_close_btn` | Plug-and-Charge CLOSE — konektor 2 |
+| `button.wallbox_s_charge_connector_1_lock` | Zamknout konektor 1 |
+| `button.wallbox_s_charge_connector_1_unlock` | Odemknout konektor 1 |
+| `button.wallbox_s_charge_connector_1_pnc_open` | Plug-and-Charge OPEN — konektor 1 (bez auth) |
+| `button.wallbox_s_charge_connector_1_pnc_close` | Plug-and-Charge CLOSE — konektor 1 (auth required) |
+| `button.wallbox_s_charge_connector_2_lock` | Zamknout konektor 2 |
+| `button.wallbox_s_charge_connector_2_unlock` | Odemknout konektor 2 |
+| `button.wallbox_s_charge_connector_2_pnc_open` | Plug-and-Charge OPEN — konektor 2 |
+| `button.wallbox_s_charge_connector_2_pnc_close` | Plug-and-Charge CLOSE — konektor 2 |
 
 ### Switch (sdílení s mobilní aplikací)
 
@@ -134,35 +147,47 @@ Pro **konektor 2** to samé (`sensor.scharge_2_voltage`, ...).
 
 Switch najdeš v **Settings → Devices & Services → S-charge Wallbox → Configuration entities** (kategorie CONFIG).
 
-## Automatizace — PV-driven modulace
+## Automatizace — PV-driven modulace (přes ampéry)
 
-Základní automatizace pro modulaci nabíjecího výkonu dle solárního přebytku:
+Reálná modulace nabíjení dle solárního přebytku jede přes **nabíjecí proud
+konektoru** (A), ne přes globální LoadBalance (W). Doporučený vzor je
+**delta regulace** (feedback): každých ~15–30 s uprav proud o malý krok podle
+toho, kolik přebytku/importu vidíš na bodě připojení, místo skokového
+přepočtu — tím se vyhneš oscilacím.
+
+Senzory `sensor.your_pv_surplus_w` apod. níže jsou **placeholdery** — dosaď
+vlastní (výkon FVE, spotřeba domu, výkon na bodě připojení / grid).
 
 ```yaml
-- alias: "Wallbox - PV modulace"
+# Jednoduchý feedback: drž grid ≈ 0 (auto jí přebytek). 720 = 3φ·400V·√3 (W na A).
+- alias: "Wallbox - PV modulace (ampéry)"
+  mode: single
   trigger:
     - platform: time_pattern
-      seconds: /30
+      seconds: /15
   condition:
-    - condition: state
-      entity_id: binary_sensor.scharge_1_connected
-      state: "on"
+    # jen když auto reálně nabíjí na konektoru 1
+    - condition: numeric_state
+      entity_id: sensor.wallbox_s_charge_connector_1_power
+      above: 1.0
   action:
     - variables:
-        surplus: >
-          {{ states('sensor.sofar_pv_prumer_5_min') | float(0)
-             - states('sensor.dum_spotreba_bez_wb_virivka') | float(0) }}
-        target: >
-          {% if surplus < 4000 %} 4000
-          {% elif surplus > 11000 %} 11000
-          {% else %} {{ surplus | int }}
-          {% endif %}
+        # kladné = export do sítě (přebytek), záporné = import. Dosaď svůj senzor.
+        grid_export_w: "{{ states('sensor.your_grid_power_w') | float(0) }}"
+        actual_a: "{{ states('sensor.wallbox_s_charge_connector_1_current') | float(0) }}"
+        # krok úměrný přebytku, cap ±5 A/iter
+        delta_a: "{{ [[ (grid_export_w / 720) | round(0) | int, 5] | min, -5] | max }}"
+        target_a: "{{ [[ (actual_a + delta_a) | int, 6] | max, 32] | min }}"
     - service: number.set_value
       target:
-        entity_id: number.scharge_loadbalance
+        entity_id: number.wallbox_s_charge_connector_1_charging_current
       data:
-        value: "{{ target }}"
+        value: "{{ target_a }}"
 ```
+
+> **Tip:** v produkci přidej další podmínky (limit hlavního jističe, ochrana
+> baterie při nízkém SOC, strop výstupu střídače) — nejpřísnější krok vítězí.
+> Viz princip „nejnižší delta vyhrává" u feedback regulátoru.
 
 ## Changelog
 
