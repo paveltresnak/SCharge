@@ -27,8 +27,8 @@ z HA strany. Není potřeba žádný cloud, BLE ani externí hardware.
            │  4. HA ACKs + sends LoadBalance / Lock / PnC commands
            ▼
 ┌─────────────────────────────────────┐
-│  Wallbox (192.168.78.x)             │
-│  S/N: 21003222073300155             │
+│  Wallbox (192.168.1.x)              │
+│  S/N: 2100XXXXXXXXXXXXX             │
 └─────────────────────────────────────┘
 ```
 
@@ -41,7 +41,7 @@ z HA strany. Není potřeba žádný cloud, BLE ani externí hardware.
    `/volume1/docker/homeassistant/config/custom_components/`)
 2. **Restart Home Assistant**
 3. **Settings → Devices & Services → + Add Integration → S-charge Wallbox**
-4. Zadejte sériové číslo wallboxu (např. `21003222073300155`)
+4. Zadejte sériové číslo wallboxu (`chargeBoxSN` — najdete na typovém štítku, formát `2100…`)
 
 ### HACS (po publikaci)
 
