@@ -7,6 +7,8 @@ a ovládání přes lokální WebSocket protokol (`ocpp1.6` subprotocol).
 **Autor:** Pavel Třešňák (kompletní reverse engineering + implementace ve spolupráci
 s Claude.AI — viz [projekt WallBox](https://github.com/paveltresnak/SCharge/tree/main/WallBox) pro reverse engineering dokumentaci).
 
+![Dashboard „Wallbox S-charge" v Home Assistantu](docs/img/dashboard.png)
+
 ## Protokol
 
 Wallbox běží jako **WebSocket klient** — sám se připojí na discovery broadcast
