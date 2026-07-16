@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.2] — 2026-07-16
+
+Znovu díky reportu uživatele: *„Status sa po stlaceni ukazal, pisal WAIT, potom
+Charging."* Ta jedna věta doplnila slovník `chargeStatus` a odhalila, že whitelist
+z v0.6.1 sice opravil starý bug, ale zavedl nový (kosmetický).
+
+### 🔑 Slovník `chargeStatus` (FW `E3P3_H_1.1.1_R5190`)
+
+Není nikde zdokumentovaný, tak ho zapisujeme, jak ho pozorujeme:
+
+| Stav | Význam |
+|---|---|
+| `idle` | kabel odpojený, nic neběží |
+| `wait` | kabel zapojený, ale **neteče proud** — **dva různé významy**, viz níže |
+| `charging` | reálně nabíjí |
+
+**`wait` je zrádný — znamená dvě věci, které od sebe podle stavu nerozeznáš:**
+1. **přechodně** po `Authorize Start`, než auto začne brát proud (`idle → wait → charging`),
+2. **trvale**, když session skončila a kabel zůstal v zásuvce (auto na svém limitu SoC).
+
+Tohle je i vysvětlení původního bugu z v0.6.0: blacklist `!= 'idle'` hlásil význam (2)
+jako „nabíjím", uživatel dal Stop a wallbox ho odmítl — žádná session neběžela.
+
+### Fixed
+- **Switch po stisknutí ON krátce cvakl zpět na OFF.** Regrese z v0.6.1: whitelist
+  `== 'charging'` je proti významu (2) správný, ale přechodný `wait` (význam 1) tím
+  spadl na `off` — uživatel stiskne zapnout, přepínač se vrátí, a než naskočí
+  `charging`, vypadá to, že příkaz selhal.
+  **Fix:** po **potvrzeném** Startu se `on` drží po dobu hájení (60 s) i přes `wait`.
+  Rozlišit oba významy `wait` podle stavu nejde — jen podle toho, jestli jsme právě
+  dali Start. Po vypršení rozhoduje zase telemetrie: když auto nabíjet nezačne,
+  switch poctivě spadne na `off`. `Stop` dobu hájení okamžitě zahodí.
+  Pokryto testem 14 scénářů (rozjezd, auto se nerozjelo, mrtvá session, Stop za
+  chodu, konec na limitu SoC, neznámý stav, bez telemetrie).
+
 ## [0.6.1] — 2026-07-16
 
 Vyšlo pár hodin po v0.6.0 díky uživateli, který start/stop hned vyzkoušel na

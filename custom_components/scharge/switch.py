@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
@@ -20,12 +21,26 @@ _LOGGER = logging.getLogger(__name__)
 DEFAULT_AUTHORIZE_CURRENT = 16
 
 # chargeStatus hodnoty, které znamenají „reálně nabíjí".
-# WHITELIST záměrně: pozorované hodnoty jsou zatím 'idle' (nenabíjí) a
-# 'charging' (nabíjí), ale slovník má i mezistavy (kabel zapojený, session
-# skončená autem na jeho limitu SoC). Ty NEJSOU 'idle' — blacklist
-# `!= 'idle'` je proto hlásil jako nabíjení a Stop pak wallbox odmítal.
-# Když se objeví další stav, je bezpečnější ho brát jako „nenabíjí".
+#
+# WHITELIST záměrně. Pozorovaný slovník (2026-07-16, FW E3P3_H_1.1.1_R5190):
+#   idle      — kabel odpojený, nic neběží
+#   wait      — kabel zapojený, ale neteče proud. DVA VÝZNAMY:
+#               (a) přechodně po Authorize Start, než auto začne brát proud
+#               (b) trvale, když session skončila (auto na svém limitu SoC)
+#   charging  — reálně nabíjí
+#
+# `wait` do whitelistu NEPATŘÍ: kvůli významu (b) by se vrátil bug z v0.6.0,
+# kdy switch svítil „nabíjím" nad mrtvou session a Stop wallbox odmítal.
+# Přechodný `wait` po Startu (význam (a)) řeší _STARTING_GRACE níže.
+#
+# Neznámý stav = „nenabíjí" (bezpečnější směr).
 CHARGING_STATUSES = {"charging"}
+
+# Jak dlouho po POTVRZENÉM Startu držet switch na `on`, i když telemetrie
+# hlásí `wait`. Bez toho switch po stisknutí cvakne zpět na off a teprve pak
+# na on — uživatel to čte jako „nefungovalo to". Po vypršení rozhoduje zase
+# telemetrie: když auto nabíjet nezačne, switch poctivě spadne na off.
+_STARTING_GRACE = 60.0
 
 
 async def async_setup_entry(
@@ -107,6 +122,8 @@ class SchargeChargingSwitch(SchargeEntity, SwitchEntity):
         self._attr_unique_id = f"{coordinator.serial}_c_{connector_id}_charging"
         self._attr_translation_key = f"c_{connector_id}_charging"
         self._optimistic: bool | None = None
+        # monotonic deadline doby hájení po Startu (viz _STARTING_GRACE), nebo None
+        self._starting_until: float | None = None
 
     @property
     def _charge_status(self) -> str | None:
@@ -116,22 +133,29 @@ class SchargeChargingSwitch(SchargeEntity, SwitchEntity):
     def is_on(self) -> bool | None:
         """Nabíjí se na tomhle konektoru?
 
-        WHITELIST, ne blacklist: `on` výhradně pro CHARGING_STATUSES.
+        Pořadí: reálné nabíjení > rozjezd po Startu > telemetrie > optimismus.
 
-        Dřív to bylo `chargeStatus != 'idle'` a to byla chyba. Slovník má
-        i mezistavy (kabel zapojený, ale session skončila — třeba když auto
-        dosáhne svého limitu SoC). Ty nejsou 'idle', takže se switch tvářil
-        „nabíjím", uživatel dal stop a wallbox ho odmítl (`result: false`),
-        protože žádná session neběžela. Whitelist je proti neznámým stavům
-        odolný: co není prokazatelně nabíjení, je vypnuto.
+        `wait` je záměrně mimo whitelist — znamená totiž jak „rozjíždím se",
+        tak „kabel visí nad mrtvou session". Rozlišit je nelze podle stavu,
+        jen podle toho, jestli jsme právě dali Start; proto _STARTING_GRACE.
 
-        Telemetrie má přednost před optimistickou hodnotou — jinak by switch
-        po Startu zůstal viset na `on`, i když auto nabíjet nezačne nebo samo
-        skončí.
+        Telemetrie má jinak přednost před optimistickou hodnotou — jinak by
+        switch po Startu zůstal viset na `on`, i když auto nabíjet nezačne
+        nebo samo skončí na svém limitu SoC.
         """
-        status = self._charge_status
-        if status is not None:
-            return str(status).strip().lower() in CHARGING_STATUSES
+        status = (self._charge_status or "").strip().lower()
+
+        if status in CHARGING_STATUSES:
+            return True
+
+        # Rozjezd: Start potvrzen, auto ještě nebere proud (`wait`).
+        if self._starting_until is not None:
+            if time.monotonic() < self._starting_until:
+                return True
+            self._starting_until = None      # doba hájení vypršela
+
+        if status:
+            return False
         return self._optimistic
 
     async def _authorize(self, purpose: str) -> None:
@@ -148,7 +172,11 @@ class SchargeChargingSwitch(SchargeEntity, SwitchEntity):
                 f"SoC), nebo se právě nabíjí a Start je zbytečný. Aktuální stav "
                 f"konektoru: {self._charge_status!r}."
             )
-        self._optimistic = (purpose == "Start")
+        started = purpose == "Start"
+        self._optimistic = started
+        # Start: drž `on` přes fázi `wait`, než auto začne brát proud.
+        # Stop: dobu hájení zahoď, ať switch může hned spadnout na off.
+        self._starting_until = (time.monotonic() + _STARTING_GRACE) if started else None
         self.async_write_ha_state()
 
     async def async_turn_on(self, **kwargs) -> None:
