@@ -24,6 +24,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import (
+    ACK_TIMEOUT,
     DEFAULT_BROADCAST_ADDR,
     DEFAULT_BROADCAST_INTERVAL,
     DEFAULT_BROADCAST_PORT,
@@ -85,17 +86,31 @@ class SchargeCoordinator:
         # Výsledky LoadBalance ACK — aby entity věděla že command prošel
         self.last_loadbalance_set: int | None = None
 
+        # Poslední wallboxem POTVRZENÝ nabíjecí proud per konektor {1: 16, 2: 6}.
+        # Používá switch nabíjení, aby při Start/Stop poslal smysluplný proud.
+        self.last_authorized_current: dict[int, int] = {}
+
         # Běžící WS client connection (k odeslání commandů)
         self._ws = None
+
+        # Rozpracované příkazy čekající na ACK: uniqueId -> Future[bool].
+        # Wallbox odpovídá na náš mt=5 ACKem mt=6 s payloadem {"result": bool}.
+        self._pending_acks: dict[str, asyncio.Future] = {}
 
         # Background tasks
         self._ws_server = None
         self._ws_server_task: asyncio.Task | None = None
         self._broadcast_task: asyncio.Task | None = None
 
-        # Bridge enabled — když False, HA drží krok stranou a nechá WS session
-        # pro mobilní aplikaci (UDP broadcast zastaven + aktivní WS zavřen).
-        # WS server zůstává poslouchat, aby šlo obnovit bez restart integrace.
+        # Bridge enabled — když False, HA drží krok stranou a nechá wallbox
+        # mobilní aplikaci: UDP broadcast zastaven, aktivní WS zavřen A WS
+        # server zastaven (port uvolněn).
+        #
+        # Port se MUSÍ uvolnit: wallbox si pamatuje poslední endpoint a dobývá
+        # se tam bez ohledu na broadcast. Když server dál poslouchá, HA spojení
+        # přijímá a neobsluhuje → desítky spojení ve FIN_WAIT1 a mrtvý link,
+        # dokud nevyprší TCP timeouty (~3 min). S uvolněným portem dostane
+        # wallbox RST, přestane hromadit a poslechne další broadcast (~20 s).
         self._bridge_enabled: bool = True
 
         # ProtocolState pro správu uniqueId a state tracking
@@ -107,8 +122,16 @@ class SchargeCoordinator:
         """Spustit WS server + UDP broadcast loop."""
         _LOGGER.info("Starting SchargeCoordinator on port %d (SN=%s)",
                      self.ws_port, self.serial)
+        await self._start_ws_server()
 
-        # WS server
+        # UDP broadcast loop (jen pokud je bridge zapnutý)
+        if self._bridge_enabled:
+            self._start_broadcast_task()
+
+    async def _start_ws_server(self) -> None:
+        """Internal: nastartovat WS server (obsadit port), pokud neběží."""
+        if self._ws_server is not None:
+            return
         self._ws_server = await websockets.serve(
             self._handle_connection,
             "0.0.0.0",
@@ -119,9 +142,21 @@ class SchargeCoordinator:
         )
         _LOGGER.info("WS server listening on 0.0.0.0:%d", self.ws_port)
 
-        # UDP broadcast loop (jen pokud je bridge zapnutý)
-        if self._bridge_enabled:
-            self._start_broadcast_task()
+    async def _stop_ws_server(self) -> None:
+        """Internal: zastavit WS server a UVOLNIT port.
+
+        Wallbox neposílá graceful close → wait_closed() by čekal donekonečna,
+        proto timeout.
+        """
+        if self._ws_server is None:
+            return
+        self._ws_server.close()
+        try:
+            await asyncio.wait_for(self._ws_server.wait_closed(), timeout=3)
+        except asyncio.TimeoutError:
+            _LOGGER.warning("WS server close timeout — forcing down")
+        self._ws_server = None
+        _LOGGER.info("WS server stopped, port %d released", self.ws_port)
 
     # ─── Bridge enable/disable (pro sdílení wallboxu s mobilní app) ─────────
 
@@ -150,10 +185,15 @@ class SchargeCoordinator:
     async def pause_bridge(self) -> None:
         """Uvolnit wallbox pro mobilní aplikaci.
 
-        Zastaví UDP broadcast a zavře aktivní WS — wallbox se odpojí a další
-        UDP broadcast z mobilní app bude akceptován. WS server HA zůstává
-        poslouchat, takže po resume_bridge() stačí obnovit broadcast a wallbox
-        se sám vrátí zpět do HA.
+        Zastaví UDP broadcast, zavře aktivní WS a ZASTAVÍ WS SERVER (uvolní port).
+
+        Uvolnění portu je nutné, ne kosmetika: wallbox si pamatuje poslední
+        endpoint a připojuje se tam bez ohledu na to, kdo broadcastuje. Když
+        server dál poslouchá, HA jeho spojení přijímá, ale neobsluhuje →
+        hromadí se desítky spojení ve FIN_WAIT1 a link je mrtvý, dokud
+        nevyprší TCP timeouty (~3 min). To postihlo i samotný toggle
+        pause→resume. S uvolněným portem dostane wallbox RST a poslechne
+        další broadcast (mobilní app, nebo náš po resume_bridge).
         """
         if not self._bridge_enabled:
             return
@@ -166,15 +206,22 @@ class SchargeCoordinator:
             except (asyncio.TimeoutError, Exception) as e:
                 _LOGGER.debug("WS close timed out during bridge pause: %s", e)
             self._ws = None
+        await self._stop_ws_server()
+        self._fail_pending_acks("bridge paused")
         self.connected = False
         self._notify_entities()
 
     async def resume_bridge(self) -> None:
-        """Obnovit HA ↔ wallbox spojení po pause_bridge()."""
+        """Obnovit HA ↔ wallbox spojení po pause_bridge().
+
+        Nastartuje WS server zpět (zabere port) a obnoví broadcast. Wallbox se
+        typicky vrátí do ~20 s.
+        """
         if self._bridge_enabled:
             return
-        _LOGGER.info("Bridge resumed — restarting UDP broadcast discovery")
+        _LOGGER.info("Bridge resumed — restarting WS server + UDP broadcast discovery")
         self._bridge_enabled = True
+        await self._start_ws_server()
         self._start_broadcast_task()
         # WS connect nás najde sám přes další broadcast cyklus (3 s)
         self._notify_entities()
@@ -193,12 +240,8 @@ class SchargeCoordinator:
                 _LOGGER.debug("WS close timed out/failed: %s", e)
             self._ws = None
         # 3. Close WS server with timeout
-        if self._ws_server:
-            self._ws_server.close()
-            try:
-                await asyncio.wait_for(self._ws_server.wait_closed(), timeout=3)
-            except asyncio.TimeoutError:
-                _LOGGER.warning("WS server close timeout — forcing down")
+        await self._stop_ws_server()
+        self._fail_pending_acks("coordinator stopped")
         self.connected = False
         self._notify_entities()
 
@@ -301,6 +344,8 @@ class SchargeCoordinator:
             if self._ws is websocket:
                 self._ws = None
                 self.connected = False
+                # Nenech příkazy viset do timeoutu — odpověď už nepřijde.
+                self._fail_pending_acks("WS session closed")
                 self._notify_entities()
 
     async def _handle_message(self, raw: str) -> None:
@@ -316,6 +361,15 @@ class SchargeCoordinator:
         if msg.is_ack:
             _LOGGER.debug("ACK received for uniqueId=%s payload=%s",
                           msg.unique_id, msg.payload)
+            fut = self._pending_acks.pop(msg.unique_id, None)
+            if fut is not None and not fut.done():
+                # Wallbox vrací {"chargeBoxSN": ..., "result": true/false}.
+                # Chybějící "result" bereme jako úspěch — starší firmware ho
+                # nemusí posílat a dřív jsme ACK stejně nečetli.
+                result = True
+                if isinstance(msg.payload, dict) and "result" in msg.payload:
+                    result = bool(msg.payload["result"])
+                fut.set_result(result)
             return
 
         if not msg.is_request:
@@ -354,7 +408,12 @@ class SchargeCoordinator:
     # ─── TX helpers (volané z entity) ──────────────────────────────────────────
 
     async def _send_message(self, msg: Message) -> bool:
-        """Odeslat zprávu přes aktuální WS. Vrátí True při úspěchu."""
+        """Odeslat zprávu přes aktuální WS. Vrátí True, když odešla.
+
+        POZOR: nečeká na ACK — sem patří jen naše odpovědi (mt=6) na požadavky
+        wallboxu. Pro příkazy (mt=5) použij _send_and_wait, jinak se neuvidí,
+        že je wallbox odmítl.
+        """
         if self._ws is None:
             _LOGGER.warning("No active WS session, can't send %s", msg)
             return False
@@ -365,17 +424,50 @@ class SchargeCoordinator:
             _LOGGER.error("send failed: %s", e)
             return False
 
+    def _fail_pending_acks(self, reason: str) -> None:
+        """Dokončit všechny čekající ACK futures jako neúspěch (link padl)."""
+        for uid, fut in list(self._pending_acks.items()):
+            if not fut.done():
+                _LOGGER.debug("Pending ACK uid=%s failed: %s", uid, reason)
+                fut.set_result(False)
+        self._pending_acks.clear()
+
+    async def _send_and_wait(self, msg: Message, timeout: float = ACK_TIMEOUT) -> bool:
+        """Odeslat příkaz (mt=5) a počkat na ACK wallboxu.
+
+        Vrací skutečné potvrzení z pole `result` v ACK, ne jen „bajty odešly".
+        Wallbox odpovídá typicky do ~0,3 s; `result: False` vrací např. když na
+        konektoru není auto/session.
+        """
+        fut: asyncio.Future = self.hass.loop.create_future()
+        self._pending_acks[msg.unique_id] = fut
+        if not await self._send_message(msg):
+            self._pending_acks.pop(msg.unique_id, None)
+            return False
+        try:
+            result = await asyncio.wait_for(fut, timeout=timeout)
+        except asyncio.TimeoutError:
+            _LOGGER.warning("Bez ACK do %.1f s (uid=%s, action=%s) — beru jako neúspěch",
+                            timeout, msg.unique_id, msg.action)
+            return False
+        finally:
+            self._pending_acks.pop(msg.unique_id, None)
+        if not result:
+            _LOGGER.warning("Wallbox odmítl %s (uid=%s): result=false",
+                            msg.action, msg.unique_id)
+        return result
+
     async def send_loadbalance(self, watts: int) -> bool:
-        """Poslat LoadBalance příkaz."""
+        """Poslat LoadBalance příkaz. Vrací potvrzení wallboxu."""
         msg = make_load_balance(self._proto, watts)
         _LOGGER.info("TX LoadBalance(%d W) uid=%s", watts, msg.unique_id)
-        ok = await self._send_message(msg)
+        ok = await self._send_and_wait(msg)
         if ok:
             self.last_loadbalance_set = watts
         return ok
 
     async def send_authorize(self, connector_id: int, purpose: str, current: int) -> bool:
-        """Start/Stop charging session at given current (A).
+        """Start/Stop charging session at given current (A). Vrací potvrzení wallboxu.
 
         Calling Start during active charging re-authorizes the session with a new
         current limit — this is how we throttle per-connector amperage for
@@ -384,21 +476,24 @@ class SchargeCoordinator:
         msg = make_authorize(self._proto, connector_id, purpose, current)
         _LOGGER.info("TX Authorize(c=%d, %s, %d A) uid=%s",
                      connector_id, purpose, current, msg.unique_id)
-        return await self._send_message(msg)
+        ok = await self._send_and_wait(msg)
+        if ok:
+            self.last_authorized_current[connector_id] = current
+        return ok
 
     async def send_electronic_lock(self, connector_id: int, purpose: str) -> bool:
-        """Lock/unlock electronic latch na konektoru."""
+        """Lock/unlock electronic latch na konektoru. Vrací potvrzení wallboxu."""
         msg = make_electronic_lock(self._proto, connector_id, purpose)
         _LOGGER.info("TX ElectronicLock(c=%d, %s) uid=%s",
                      connector_id, purpose, msg.unique_id)
-        return await self._send_message(msg)
+        return await self._send_and_wait(msg)
 
     async def send_pnc_set(self, connector_id: int, purpose: str) -> bool:
-        """Open/close Plug-and-Charge."""
+        """Open/close Plug-and-Charge. Vrací potvrzení wallboxu."""
         msg = make_pnc_set(self._proto, connector_id, purpose)
         _LOGGER.info("TX PnCSet(c=%d, %s) uid=%s",
                      connector_id, purpose, msg.unique_id)
-        return await self._send_message(msg)
+        return await self._send_and_wait(msg)
 
     # ─── Notifikace entit ─────────────────────────────────────────────────────
 

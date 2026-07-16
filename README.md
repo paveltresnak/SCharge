@@ -135,19 +135,32 @@ Pro **konektor 2** to samé (`sensor.wallbox_s_charge_connector_2_voltage`, ...)
 | `button.wallbox_s_charge_connector_2_pnc_open` | Plug-and-Charge OPEN — konektor 2 |
 | `button.wallbox_s_charge_connector_2_pnc_close` | Plug-and-Charge CLOSE — konektor 2 |
 
-### Switch (sdílení s mobilní aplikací)
+### Switch
 
 | Entity | Stavy | Popis |
 |---|---|---|
-| `switch.wallbox_s_charge_bridge` (CS: „Můstek HA", EN: „Bridge") | `on` *(default)* / `off` | Vypni, když chceš připojit se na wallbox přes mobilní aplikaci S-charge. |
+| `switch.wallbox_s_charge_bridge` (CS: „Můstek HA", EN: „Bridge") | `on` *(default)* / `off` | Vypni, když se chceš připojit na wallbox přes mobilní aplikaci S-charge. |
+| `switch.wallbox_s_charge_nabijeni_konektor_{1,2}` | `on` / `off` | Start/stop nabíjení na konektoru. **⚠️ Neověřeno na reálném voze — viz níže.** |
+
+#### Můstek HA
 
 **Pozadí:** Wallbox Joint Tech JNT-EVCD2 drží pouze **jednu aktivní WebSocket session**. Jakmile je HA integrace připojena, mobilní aplikace se k wallboxu nepřipojí. Bridge switch umožňuje HA na chvíli „krok stranou".
 
 **Jak funguje:**
-- **`off`** → HA zastaví UDP broadcast + zavře aktivní WS. Wallbox se uvolní, mobilní app chytí session. Entity integrace přejdou na `unavailable`.
-- **`on`** → HA obnoví UDP broadcast; wallbox se do cca 3 s vrátí zpátky k HA (pokud právě nemluví s mobilem). Entity se obnoví.
+- **`off`** → HA zastaví UDP broadcast, zavře aktivní WS a **zastaví WS server (uvolní port)**. Wallbox se uvolní, mobilní app chytí session. Entity integrace přejdou na `unavailable`.
+- **`on`** → HA nastartuje WS server zpět a obnoví UDP broadcast; wallbox se typicky vrátí **do ~20 s**. Entity se obnoví.
+
+> **Proč se port uvolňuje (od v0.6.0):** wallbox si pamatuje poslední endpoint a připojuje se tam bez ohledu na to, kdo broadcastuje. Když WS server dál poslouchal, HA jeho spojení přijímal a neobsluhoval → hromadily se desítky spojení ve `FIN_WAIT1` a link byl mrtvý, dokud nevypršely TCP timeouty (~3 min). Do v0.5.4 to postihovalo i samotný toggle `off`→`on`.
 
 Switch najdeš v **Settings → Devices & Services → S-charge Wallbox → Configuration entities** (kategorie CONFIG).
+
+#### Nabíjení konektor 1/2 — ⚠️ neověřeno
+
+Start/stop přes `Authorize Start` / `Authorize Stop`. **Nikdy neběželo proti reálně nabíjejícímu vozu.** `purpose="Stop"` pochází z reverse engineeringu [matemat13/ha_s-charge](https://github.com/matemat13/ha_s-charge); tahle integrace dosud posílala výhradně `purpose="Start"` (škrcení proudu).
+
+Ověřené je, že wallbox zprávu přijme a odpoví do ~0,3 s. **Ověřené není**, jestli Stop reálně přeruší nabíjení a jestli ho Start rozjede zpět.
+
+**Pojistka:** switch se nikdy nepřepne optimisticky — přepne se až po `result: true` od wallboxu, jinak vyhodí chybu a stav nechá být. Když v zásuvce není auto, wallbox vrací `result: false` a switch to poctivě ohlásí jako chybu.
 
 ## Automatizace — PV-driven modulace (přes ampéry)
 

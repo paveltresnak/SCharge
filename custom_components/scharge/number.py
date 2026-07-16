@@ -106,6 +106,12 @@ class SchargeChargeCurrent(SchargeEntity, NumberEntity):
         Priority: last locally-set value (optimistic) > reserveCurrent from
         SynchroStatus. Wallbox often doesn't echo reserveCurrent back, so
         without optimistic tracking the state would stay at 0.
+
+        Wallbox hlásí `reserveCurrent = 0`, když na konektoru neběží session
+        (typicky odpojené auto). Nula ale NENÍ platný proud — rozsah je 6–32 A.
+        Vracet ji znamená, že entita reportuje stav mimo vlastní min/max a UI
+        pak ukazuje jako nejnižší hodnotu 0 místo 6. Proto vracíme None
+        (= neznámo), dokud wallbox nedá smysluplnou hodnotu.
         """
         if self._optimistic_value is not None:
             return self._optimistic_value
@@ -115,7 +121,16 @@ class SchargeChargeCurrent(SchargeEntity, NumberEntity):
                else self.coordinator.synchro_status.connector_vice)
         if src is None:
             return None
-        return getattr(src, "reserve_current", None)
+        raw = getattr(src, "reserve_current", None)
+        if raw is None:
+            return None
+        try:
+            amps = int(raw)
+        except (TypeError, ValueError):
+            return None
+        if amps < CHARGE_CURRENT_MIN or amps > CHARGE_CURRENT_MAX:
+            return None
+        return amps
 
     async def async_set_native_value(self, value: float) -> None:
         amps = int(value)

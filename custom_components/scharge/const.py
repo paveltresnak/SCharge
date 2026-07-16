@@ -17,6 +17,10 @@ DEFAULT_BROADCAST_INTERVAL = 3.0    # sekund
 # Protocol constants
 WS_SUBPROTOCOL = "ocpp1.6"
 
+# Jak dlouho čekat na ACK wallboxu u odeslaného příkazu (mt=5).
+# Naměřeno ~0,3 s; 5 s je rezerva na zatížený link.
+ACK_TIMEOUT = 5.0
+
 # LoadBalance range (W) — pro wallbox 22 kW
 LOADBALANCE_MIN = 4000
 LOADBALANCE_MAX = 14600

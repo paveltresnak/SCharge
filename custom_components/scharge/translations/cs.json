@@ -72,7 +72,9 @@
             "c_2_charge_current": {"name": "Konektor 2 - nabíjecí proud"}
         },
         "switch": {
-            "bridge": {"name": "Můstek HA"}
+            "bridge": {"name": "Můstek HA"},
+            "c_1_charging": {"name": "Nabíjení konektor 1"},
+            "c_2_charging": {"name": "Nabíjení konektor 2"}
         }
     }
 }

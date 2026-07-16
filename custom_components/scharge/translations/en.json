@@ -72,7 +72,9 @@
             "c_2_charge_current": {"name": "Connector 2 - Charging current"}
         },
         "switch": {
-            "bridge": {"name": "Bridge"}
+            "bridge": {"name": "Bridge"},
+            "c_1_charging": {"name": "Connector 1 charging"},
+            "c_2_charging": {"name": "Connector 2 charging"}
         }
     }
 }

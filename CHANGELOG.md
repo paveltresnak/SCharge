@@ -5,6 +5,80 @@ All notable changes to this project will be documented in this file.
 Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] — 2026-07-16
+
+Verze vznikla z jednoho dotazu — „umí integrace vypnout a zapnout nabíjení?".
+Odpověď byla ne, a při ověřování na živém wallboxu vyplavaly dvě chyby, které
+tam byly od začátku.
+
+### ⚠️ Start/stop nabíjení NENÍ FYZICKY OTESTOVÁNO
+
+Bez servítek, ať je to jasné dřív, než se na to někdo spolehne:
+
+- Nové switche `Nabíjení konektor 1/2` **nikdy neběžely proti reálně nabíjejícímu vozu.**
+  V době vývoje nebylo auto v zásuvce.
+- `Authorize` s `purpose="Stop"` je převzatý z reverse engineeringu
+  [matemat13/ha_s-charge](https://github.com/matemat13/ha_s-charge). Tahle integrace
+  dosud posílala **výhradně** `purpose="Start"` (škrcení proudu, `number.py`).
+  **Stop nebyl na tenhle hardware nikdy odeslán.**
+- Co je ověřené: wallbox zprávu **přijme, rozparsuje a odpoví do ~0,3 s**. Při
+  odpojeném autě vrací `result: false` na Stop **i na Start** — a Start je příkaz,
+  který denně prokazatelně funguje. Z toho plyne, že `result: false` znamená
+  „nemám session/auto", ne „neznám ten příkaz".
+- Co ověřené **není**: jestli Stop reálně přeruší probíhající nabíjení, jestli ho
+  Start rozjede zpět, a jestli po Stopu nebude potřeba přepojit kabel.
+
+**Pojistka:** switch se **nikdy nepřepne optimisticky**. Přepne se výhradně po
+`result: true` od wallboxu; jinak vyhodí `HomeAssistantError` a stav nechá být.
+Radši viditelná chyba než tiché tvrzení, že se něco stalo. Ověření proběhne, až
+bude vůz v zásuvce.
+
+### Added
+- **`switch.wallbox_s_charge_nabijeni_konektor_{1,2}`** — start/stop nabíjení přes
+  `Authorize Start` / `Authorize Stop`. Proud bere z posledního wallboxem
+  potvrzeného (`coordinator.last_authorized_current`), default 16 A.
+- **`coordinator.last_authorized_current`** — poslední **potvrzený** proud per konektor.
+
+### Fixed
+- **Můstek neuvolňoval port → wallbox si zamrzl na ~3 minuty.** `pause_bridge()`
+  zastavil broadcast a zavřel session, ale **WS server nechal poslouchat** na 41515.
+  Wallbox si ale pamatuje poslední endpoint a dobývá se tam bez ohledu na to, kdo
+  broadcastuje. HA jeho spojení přijímal a neobsluhoval → **napozorováno ~95 spojení
+  ve `FIN_WAIT1`** a mrtvý link, dokud nevypršely TCP timeouty. Toggle OFF→ON to
+  nespravil, reload integrace taky ne — muselo se čekat.
+  **Fix:** `pause_bridge()` teď WS server zastaví a port uvolní, `resume_bridge()`
+  ho nastartuje zpět. Wallbox dostane na reconnecty RST, přestane hromadit a
+  poslechne další broadcast. **Ověřeno: připojí se do ~20 s.**
+  Týká se to i noční automatizace typu „reinit = toggle můstku" — ta až dosud mohla
+  link naopak shodit.
+- **`number...nabijeci_proud` ukazoval jako nejnižší hodnotu 0 místo 6.** *(díky za report —
+  nahlášeno uživatelem integrace.)* Wallbox posílá `reserveCurrent = 0`, když na konektoru
+  neběží session (typicky odpojené auto). Nula ale není platný proud — rozsah je 6–32 A.
+  Entita ji reportovala jako svůj stav, takže hlásila hodnotu mimo vlastní `min`/`max` a UI
+  slider spadl na 0.
+  **Fix:** `native_value` vrací `None` (= neznámo), když hodnota není v rozsahu 6–32.
+- **Integrace nečetla `result` z ACK — příkazy „procházely", i když je wallbox odmítl.**
+  `_send_message()` vracel `True` ve chvíli, kdy bajty odešly do socketu; pole
+  `result` se nikdy nečetlo (ACK spadl do debug logu a zahodil se). Důsledek:
+  `number...nabijeci_proud` si nastavil `_optimistic_value` a **hlásil proud, který
+  wallbox odmítl** — slider lhal. Totéž `send_loadbalance`.
+  **Fix:** ACK se páruje přes `uniqueId` (`_send_and_wait`, timeout 5 s) a
+  `send_authorize` / `send_loadbalance` / `send_electronic_lock` / `send_pnc_set`
+  vracejí **skutečné potvrzení wallboxu**. Když spadne WS nebo se pauzne můstek,
+  čekající příkazy selžou hned, místo čekání do timeoutu.
+
+### Changed
+- **BREAKING (interní API):** návratová hodnota `coordinator.send_*` už neznamená
+  „odesláno", ale „**wallbox potvrdil**". Volající, kteří brali `True` jako jistotu
+  doručení, teď dostanou `False` u odmítnutých i nezodpovězených příkazů. Je to
+  záměr — právě tohle maskovalo lhoucí slider.
+- `number...nabijeci_proud` nastaví `_optimistic_value` až po potvrzení. Automatika
+  `wallbox_amp_feedback` se nemění a chová se stejně; jen přestane věřit odmítnutým zápisům.
+
+### Nezměněno
+`LoadBalance` zůstává statický na 14 600 W (je to jen building-level strop, ne
+per-session throttle). Force-charge ze sítě integrace neumí a tahle verze na tom nic nemění.
+
 ## [0.5.4] — 2026-04-24
 
 ### Fixed
