@@ -8,6 +8,7 @@ from typing import Awaitable, Callable
 from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
@@ -107,5 +108,22 @@ class SchargeButton(SchargeEntity, ButtonEntity):
         self._attr_unique_id = f"{coordinator.serial}_{description.key}_btn"
 
     async def async_press(self) -> None:
+        """Poslat příkaz a NEZAMLČET, když ho wallbox odmítne.
+
+        Do v0.7.0 se návratová hodnota zahazovala — přestože `press_fn` je
+        typovaná jako `Awaitable[bool]`. Od v0.6.0, kdy `send_*` vrací skutečné
+        potvrzení wallboxu (`result` z ACK), to znamenalo, že tlačítko odmítnutý
+        příkaz **tiše spolklo** a tvářilo se úspěšně. Switche přitom na totéž
+        hlásí chybu — stejná akce, dvě různá chování.
+        """
         _LOGGER.info("Button pressed: %s", self.entity_description.key)
-        await self.entity_description.press_fn(self.coordinator)
+        ok = await self.entity_description.press_fn(self.coordinator)
+        # `is False` schválně: výchozí press_fn vrací None (= nevíme), a to
+        # není důvod křičet. Chyba jen na explicitní odmítnutí wallboxem.
+        if ok is False:
+            raise HomeAssistantError(
+                f"Wallbox odmítl akci {self.entity_description.name!r} "
+                f"— nic se nezměnilo. Příkaz přijme jen ve stavu, kdy dává "
+                f"smysl (např. zámek nejde ovládat bez zapojeného kabelu). "
+                f"Stav konektorů: {self.coordinator.status_summary()}."
+            )

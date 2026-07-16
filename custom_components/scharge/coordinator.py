@@ -517,10 +517,10 @@ class SchargeCoordinator:
             _LOGGER.warning("Wallbox ODMÍTL %s (result=false, uid=%s) — nic neudělal. "
                             "Stav konektorů: %s. Wallbox příkaz přijme jen ve stavu, kdy "
                             "dává smysl (Stop když session běží, Start když ji lze založit).",
-                            _describe(msg), msg.unique_id, self._status_summary())
+                            _describe(msg), msg.unique_id, self.status_summary())
         return result
 
-    def _status_summary(self) -> str:
+    def status_summary(self) -> str:
         """'k1=idle, k2=charging' — kontext do hlášky o odmítnutí."""
         bits = [f"k{cid}={self.connector_status(cid) or '?'}" for cid in (1, 2)]
         return ", ".join(bits)

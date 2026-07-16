@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.7.1] — 2026-07-16
+
+### Fixed
+- **Tlačítka tiše polykala odmítnutí wallboxu.** `async_press()` zahazovalo
+  návratovou hodnotu — přestože `press_fn` je typovaná jako `Awaitable[bool]`.
+  Od v0.6.0, kdy `send_*` vrací **skutečné potvrzení** z ACK, to znamenalo, že
+  odmítnutý příkaz vypadal jako úspěšný: tlačítko zhaslo, nic se nestalo, nikde
+  ani slovo. Switche přitom na totéž hlásí chybu — **stejná akce, dvě různá
+  chování**. Je to tatáž třída chyby, jakou v0.6.0 opravovala u slideru proudu;
+  v tlačítkách jen zůstala.
+  **Fix:** tlačítko při `result: false` vyhodí `HomeAssistantError` a připojí
+  aktuální stav konektorů. (Chyba se hlásí jen na **explicitní** odmítnutí —
+  `None` = „nevíme" křičet nemá proč.)
+
+Vyplynulo z diskuze nad v0.7.0 — jestli po přidání přepínačů nemají tlačítka
+zmizet. **Nemají a nezmizí:** tlačítko je bezstavové a přepínač si stav nedrží
+(čte ho z telemetrie), takže obojí je jen ovládací plocha nad týmž příkazem
+a týmž zdrojem pravdy — rozejít se nemůžou. Ověřeno naživo: stisk *tlačítka*
+Lock přepnul *switch* na `on`, Unlock zpátky na `off`.
+Za tu otázku dík — bez ní bychom tuhle chybu nenašli.
+
+### Changed
+- `coordinator.status_summary()` je nově veřejná (volá ji i `button.py`).
+
 ## [0.7.0] — 2026-07-16
 
 Na přání uživatele integrace: *„nez budem preprogramovavat cele templaty —
