@@ -19,6 +19,14 @@ _LOGGER = logging.getLogger(__name__)
 # Proud poslaný v Authorize, když jsme ještě žádný potvrzený neviděli.
 DEFAULT_AUTHORIZE_CURRENT = 16
 
+# chargeStatus hodnoty, které znamenají „reálně nabíjí".
+# WHITELIST záměrně: pozorované hodnoty jsou zatím 'idle' (nenabíjí) a
+# 'charging' (nabíjí), ale slovník má i mezistavy (kabel zapojený, session
+# skončená autem na jeho limitu SoC). Ty NEJSOU 'idle' — blacklist
+# `!= 'idle'` je proto hlásil jako nabíjení a Stop pak wallbox odmítal.
+# Když se objeví další stav, je bezpečnější ho brát jako „nenabíjí".
+CHARGING_STATUSES = {"charging"}
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -78,16 +86,16 @@ class SchargeBridgeSwitch(SchargeEntity, SwitchEntity):
 class SchargeChargingSwitch(SchargeEntity, SwitchEntity):
     """Start/stop nabíjení na konektoru přes Authorize Start/Stop.
 
-    ⚠️ NEOVĚŘENO NA REÁLNÉM VOZE. Akce `Authorize` s purpose="Stop" pochází
-    z reverse engineeringu matemat13/ha_s-charge; tahle integrace dosud posílala
-    výhradně purpose="Start" (škrcení proudu). Wallbox zprávu prokazatelně
-    parsuje a odpovídá na ni do ~0,3 s, ale s odpojeným autem vrací `result:
-    false` na Start i Stop — takže se bez vozu v zásuvce nedá rozhodnout, jestli
-    Stop reálně přeruší nabíjení a jestli ho Start rozjede zpět.
+    Ověřeno na reálném voze (2026-07-16, uživatel integrace): Start i Stop
+    fungují opakovaně. `Authorize Start` **zakládá session** — nejen škrtí
+    proud; s vypnutým PnC je to jediná cesta, jak nabíjení rozjet z HA.
+    (Pozor: proto i pohyb sliderem `nabíjecí proud` nabíjení nastartuje.)
 
-    Proto switch NIKDY nepřepne stav optimisticky: přepne se až po `result:
-    true` od wallboxu, jinak vyhodí HomeAssistantError. Radši viditelná chyba
-    než tiché tvrzení, že se něco stalo.
+    Wallbox příkaz přijme jen ve stavu, kdy dává smysl — jinak ACKne
+    `result: false` a NIC neudělá. Proto switch nikdy nepřepíná stav
+    optimisticky: přepne se až po `result: true`, jinak vyhodí
+    HomeAssistantError. Radši viditelná chyba než tiché tvrzení, že se
+    něco stalo.
     """
 
     _attr_has_entity_name = True
@@ -102,26 +110,29 @@ class SchargeChargingSwitch(SchargeEntity, SwitchEntity):
 
     @property
     def _charge_status(self) -> str | None:
-        ss = self.coordinator.synchro_status
-        if ss is None:
-            return None
-        src = ss.connector_main if self._connector_id == 1 else ss.connector_vice
-        return getattr(src, "charge_status", None) if src else None
+        return self.coordinator.connector_status(self._connector_id)
 
     @property
     def is_on(self) -> bool | None:
         """Nabíjí se na tomhle konektoru?
 
-        Přednost má potvrzený příkaz; jinak odvozeno z telemetrie. Slovník
-        chargeStatus známe zatím jen částečně ('idle' = nenabíjí), takže
-        cokoli jiného bereme jako aktivní.
+        WHITELIST, ne blacklist: `on` výhradně pro CHARGING_STATUSES.
+
+        Dřív to bylo `chargeStatus != 'idle'` a to byla chyba. Slovník má
+        i mezistavy (kabel zapojený, ale session skončila — třeba když auto
+        dosáhne svého limitu SoC). Ty nejsou 'idle', takže se switch tvářil
+        „nabíjím", uživatel dal stop a wallbox ho odmítl (`result: false`),
+        protože žádná session neběžela. Whitelist je proti neznámým stavům
+        odolný: co není prokazatelně nabíjení, je vypnuto.
+
+        Telemetrie má přednost před optimistickou hodnotou — jinak by switch
+        po Startu zůstal viset na `on`, i když auto nabíjet nezačne nebo samo
+        skončí.
         """
-        if self._optimistic is not None:
-            return self._optimistic
         status = self._charge_status
-        if status is None:
-            return None
-        return status != "idle"
+        if status is not None:
+            return str(status).strip().lower() in CHARGING_STATUSES
+        return self._optimistic
 
     async def _authorize(self, purpose: str) -> None:
         current = self.coordinator.last_authorized_current.get(
@@ -129,9 +140,13 @@ class SchargeChargingSwitch(SchargeEntity, SwitchEntity):
         ok = await self.coordinator.send_authorize(self._connector_id, purpose, current)
         if not ok:
             raise HomeAssistantError(
-                f"Wallbox odmítl Authorize {purpose} na konektoru {self._connector_id} "
-                f"({current} A). Nejčastěji proto, že v zásuvce není auto nebo neběží "
-                f"session — stav nabíjení se nezměnil."
+                f"Wallbox odmítl Authorize {purpose} na konektoru "
+                f"{self._connector_id} ({current} A) — stav nabíjení se nezměnil. "
+                f"Wallbox tenhle příkaz přijme jen ve stavu, kdy dává smysl: Stop "
+                f"když session běží, Start když ji lze založit. Časté příčiny: auto "
+                f"není zapojené, session už sama skončila (auto dosáhlo svého limitu "
+                f"SoC), nebo se právě nabíjí a Start je zbytečný. Aktuální stav "
+                f"konektoru: {self._charge_status!r}."
             )
         self._optimistic = (purpose == "Start")
         self.async_write_ha_state()

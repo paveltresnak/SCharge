@@ -168,13 +168,26 @@ Pro **konektor 2** to samé (`sensor.wallbox_s_charge_connector_2_voltage`, ...)
 
 Switch najdeš v **Settings → Devices & Services → S-charge Wallbox → Configuration entities** (kategorie CONFIG).
 
-#### Nabíjení konektor 1/2 — ⚠️ neověřeno
+#### Nabíjení konektor 1/2
 
-Start/stop přes `Authorize Start` / `Authorize Stop`. **Nikdy neběželo proti reálně nabíjejícímu vozu.** `purpose="Stop"` pochází z reverse engineeringu [matemat13/ha_s-charge](https://github.com/matemat13/ha_s-charge); tahle integrace dosud posílala výhradně `purpose="Start"` (škrcení proudu).
+Start/stop přes `Authorize Start` / `Authorize Stop`. **Ověřeno na reálném voze**
+(2026-07-16, firmware `E3P3_H_1.1.1_R5190`) — Start i Stop fungují opakovaně,
+i s **vypnutým PnC** (scénář „nabíjej jen na povel z HA").
 
-Ověřené je, že wallbox zprávu přijme a odpoví do ~0,3 s. **Ověřené není**, jestli Stop reálně přeruší nabíjení a jestli ho Start rozjede zpět.
+> **⚠️ `Authorize Start` zakládá session, nejen škrtí proud.** S vypnutým PnC je to
+> jediná cesta, jak nabíjení rozjet z HA. **Důsledek: i pohyb sliderem „nabíjecí
+> proud" nabíjení spustí** — na to pozor, když si slider dáváš na kartu.
+> Regulační automatizace to nepotká, pokud má skip při `power < 1 kW` (viz vzor níže).
 
-**Pojistka:** switch se nikdy nepřepne optimisticky — přepne se až po `result: true` od wallboxu, jinak vyhodí chybu a stav nechá být. Když v zásuvce není auto, wallbox vrací `result: false` a switch to poctivě ohlásí jako chybu.
+**Wallbox příkaz přijme jen ve stavu, kdy dává smysl** — Stop když session běží,
+Start když ji lze založit. Jinak ACKne `result: false` a **nic neudělá**: typicky
+když auto není zapojené, nebo session sama skončila (auto dosáhlo svého limitu SoC).
+
+**Pojistka:** switch se nikdy nepřepíná optimisticky — přepne se až po `result: true`,
+jinak vyhodí chybu (s aktuálním `chargeStatus`) a stav nechá být. Stav `on` se hlásí
+**výhradně** pro `chargeStatus == 'charging'`; cokoli jiného je `off`. Do v0.6.0 to
+byl blacklist `!= 'idle'`, který mezistavy (kabel zapojený, session ukončená autem)
+hlásil jako nabíjení — a Stop pak selhával.
 
 ## Automatizace — PV-driven modulace (přes ampéry)
 

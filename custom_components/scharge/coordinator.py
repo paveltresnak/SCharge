@@ -48,6 +48,20 @@ from .actions import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Pole payloadu, která stojí za to mít v logu u odmítnutého příkazu.
+_LOG_FIELDS = ("purpose", "connectorId", "current", "value")
+
+
+def _describe(msg) -> str:
+    """'Authorize' -> 'Authorize(purpose=Stop, connectorId=2, current=6)'.
+
+    Samotné msg.action je pro diagnostiku k ničemu — Authorize Start i Stop
+    vypadají v logu stejně.
+    """
+    p = msg.payload if isinstance(msg.payload, dict) else {}
+    bits = [f"{k}={p[k]}" for k in _LOG_FIELDS if k in p]
+    return f"{msg.action}({', '.join(bits)})" if bits else str(msg.action)
+
 
 class SchargeCoordinator:
     """Drží stav jednoho wallboxu, provozuje WS server + UDP broadcast."""
@@ -89,6 +103,13 @@ class SchargeCoordinator:
         # Poslední wallboxem POTVRZENÝ nabíjecí proud per konektor {1: 16, 2: 6}.
         # Používá switch nabíjení, aby při Start/Stop poslal smysluplný proud.
         self.last_authorized_current: dict[int, int] = {}
+
+        # Poslední viděný chargeStatus per konektor — kvůli logování přechodů.
+        # Slovník chargeStatus není zdokumentovaný; známe 'idle' a 'charging',
+        # ale existují i mezistavy (kabel zapojený, session ukončená autem na
+        # jeho limitu SoC). Právě v nich wallbox odmítá Authorize, takže když
+        # uživatel hlásí „nejde to", je tohle první věc, kterou chceme vidět.
+        self._last_charge_status: dict[int, str] = {}
 
         # Běžící WS client connection (k odeslání commandů)
         self._ws = None
@@ -396,6 +417,7 @@ class SchargeCoordinator:
             self.device_data = payload
         elif action == "SynchroStatus" and payload is not None:
             self.synchro_status = payload
+            self._log_status_transitions()
         elif action == "SynchroData" and payload is not None:
             self.synchro_data = payload
         elif action == "NWireToDics" and payload is not None:
@@ -404,6 +426,33 @@ class SchargeCoordinator:
             _LOGGER.debug("Unhandled action: %s", action)
 
         self._notify_entities()
+
+    # ─── Stav konektorů ────────────────────────────────────────────────────────
+
+    def connector_status(self, connector_id: int) -> str | None:
+        """Aktuální chargeStatus konektoru (1/2), nebo None když ho neznáme."""
+        ss = self.synchro_status
+        if ss is None:
+            return None
+        src = ss.connector_main if connector_id == 1 else ss.connector_vice
+        return getattr(src, "charge_status", None) if src else None
+
+    def _log_status_transitions(self) -> None:
+        """Zaloguj KAŽDOU změnu chargeStatus na INFO.
+
+        Slovník chargeStatus není zdokumentovaný a wallbox odmítá Authorize
+        právě v neznámých mezistavech. Bez tohohle logu se z hlášení „nejde to"
+        nedá zjistit, v jakém stavu konektor byl — a stav se do té doby nikde
+        nezaznamenával.
+        """
+        for cid in (1, 2):
+            st = self.connector_status(cid)
+            if st is None:
+                continue
+            prev = self._last_charge_status.get(cid)
+            if prev != st:
+                self._last_charge_status[cid] = st
+                _LOGGER.info("Konektor %d: chargeStatus %s → %s", cid, prev or "?", st)
 
     # ─── TX helpers (volané z entity) ──────────────────────────────────────────
 
@@ -453,9 +502,16 @@ class SchargeCoordinator:
         finally:
             self._pending_acks.pop(msg.unique_id, None)
         if not result:
-            _LOGGER.warning("Wallbox odmítl %s (uid=%s): result=false",
-                            msg.action, msg.unique_id)
+            _LOGGER.warning("Wallbox ODMÍTL %s (result=false, uid=%s) — nic neudělal. "
+                            "Stav konektorů: %s. Wallbox příkaz přijme jen ve stavu, kdy "
+                            "dává smysl (Stop když session běží, Start když ji lze založit).",
+                            _describe(msg), msg.unique_id, self._status_summary())
         return result
+
+    def _status_summary(self) -> str:
+        """'k1=idle, k2=charging' — kontext do hlášky o odmítnutí."""
+        bits = [f"k{cid}={self.connector_status(cid) or '?'}" for cid in (1, 2)]
+        return ", ".join(bits)
 
     async def send_loadbalance(self, watts: int) -> bool:
         """Poslat LoadBalance příkaz. Vrací potvrzení wallboxu."""

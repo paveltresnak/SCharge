@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.1] — 2026-07-16
+
+Vyšlo pár hodin po v0.6.0 díky uživateli, který start/stop hned vyzkoušel na
+reálném voze a poslal, co se dělo. Bez toho reportu bychom o chybě nevěděli.
+
+### ✅ Start/stop nabíjení JE OVĚŘENÝ NA REÁLNÉM VOZE
+
+v0.6.0 to poctivě přiznávala jako neotestované. **Teď už otestované je** —
+uživatel opakovaně potvrdil Start i Stop přes switch, s **vypnutým PnC**
+(scénář „nabíjej jen na povel z HA"). Firmware `E3P3_H_1.1.1_R5190`.
+
+Zároveň z toho vyplynulo něco, co jsme netušili: **`Authorize Start` zakládá
+session, nejen škrtí proud.** S vypnutým PnC je to jediný způsob, jak nabíjení
+rozjet z HA. ⚠️ **Důsledek: pohyb sliderem „nabíjecí proud" spustí nabíjení.**
+(Automatizace typu PV modulace to nepotká, pokud má skip při `power < 1 kW`.)
+
+### Fixed
+- **Switch nabíjení hlásil „nabíjí", i když se nenabíjelo → Stop pak selhal.**
+  `is_on` se odvozovalo blacklistem `chargeStatus != 'idle'`. Jenže slovník má
+  i mezistavy: když auto samo ukončí session (dosáhne svého limitu SoC) a kabel
+  zůstane v zásuvce, stav **není** `idle` — switch tedy svítil „nabíjím",
+  uživatel dal stop a wallbox ho odmítl (`result: false`), protože žádná session
+  neběžela. Přesně tenhle scénář uživatel nahlásil.
+  **Fix:** whitelist — `on` výhradně pro `chargeStatus == 'charging'`. Odolné
+  i proti stavům, které ještě neznáme: co není prokazatelně nabíjení, je vypnuto.
+  Telemetrie má nově přednost před optimistickou hodnotou, takže switch nezůstane
+  viset na `on`, když auto nabíjet nezačne nebo samo skončí.
+- **Chybová hláška u odmítnutého příkazu mátla.** Tvrdila „nejčastěji proto, že
+  v zásuvce není auto" — jenže u reportujícího uživatele kabel v autě byl.
+  Nově vysvětluje i variantu „session sama skončila (auto dosáhlo limitu SoC)"
+  a **vypisuje aktuální `chargeStatus`** konektoru.
+
+### Changed — logování (aby příště nebylo potřeba hádat)
+- **Přechody `chargeStatus` se logují na INFO:** `Konektor 2: chargeStatus idle → charging`.
+  Slovník chargeStatus není zdokumentovaný a wallbox odmítá `Authorize` právě
+  v neznámých mezistavech — dosud se stav nikde nezaznamenával, takže z hlášení
+  „nejde to" se nedalo zjistit vůbec nic.
+- **Odmítnutý příkaz je v logu konečně čitelný.** Dřív: `Wallbox odmítl Authorize
+  (uid=…): result=false` — Start i Stop vypadaly stejně. Nově:
+  `Wallbox ODMÍTL Authorize(purpose=Stop, connectorId=2, current=6) … Stav
+  konektorů: k1=idle, k2=charging`.
+- `coordinator.connector_status(id)` — jedno místo pro čtení stavu konektoru
+  (switch si ho už neodvozuje sám).
+
 ## [0.6.0] — 2026-07-16
 
 Verze vznikla z jednoho dotazu — „umí integrace vypnout a zapnout nabíjení?".
@@ -12,6 +56,10 @@ Odpověď byla ne, a při ověřování na živém wallboxu vyplavaly dvě chyby
 tam byly od začátku.
 
 ### ⚠️ Start/stop nabíjení NENÍ FYZICKY OTESTOVÁNO
+
+> **Poznámka dodatečně (v0.6.1):** už otestované je — viz v0.6.1 výše. Text níže
+> popisuje stav v době vydání v0.6.0 a nechávám ho nedotčený jako záznam toho, co
+> jsme tehdy věděli a co ne.
 
 Bez servítek, ať je to jasné dřív, než se na to někdo spolehne:
 
