@@ -22,16 +22,19 @@ DEFAULT_AUTHORIZE_CURRENT = 16
 
 # chargeStatus hodnoty, které znamenají „reálně nabíjí".
 #
-# WHITELIST záměrně. Pozorovaný slovník (2026-07-16, FW E3P3_H_1.1.1_R5190):
+# WHITELIST záměrně. Pozorovaný slovník (2026-07-16, FW E3P3_H_1.1.1_R5190,
+# poskládaný z hlášení uživatelů — výrobce ho nikde nedokumentuje):
 #   idle      — kabel odpojený, nic neběží
-#   wait      — kabel zapojený, ale neteče proud. DVA VÝZNAMY:
-#               (a) přechodně po Authorize Start, než auto začne brát proud
-#               (b) trvale, když session skončila (auto na svém limitu SoC)
+#   wait      — PŘECHODNĚ po Authorize Start, než auto začne brát proud
 #   charging  — reálně nabíjí
+#   finish    — session skončila, ale kabel zůstal v zásuvce (typicky když auto
+#               dosáhne svého limitu SoC). ⚠️ Z tohohle stavu wallbox odmítá
+#               i Authorize Start — nabíjení nejde z HA znovu rozjet.
 #
-# `wait` do whitelistu NEPATŘÍ: kvůli významu (b) by se vrátil bug z v0.6.0,
-# kdy switch svítil „nabíjím" nad mrtvou session a Stop wallbox odmítal.
-# Přechodný `wait` po Startu (význam (a)) řeší _STARTING_GRACE níže.
+# Do whitelistu patří jen `charging`. `finish` je přesně ten stav, kvůli
+# kterému v0.6.0 padala: blacklist `!= 'idle'` ho hlásil jako „nabíjím",
+# uživatel dal Stop a wallbox ho odmítl (žádná session neběžela).
+# Přechodný `wait` řeší _STARTING_GRACE níže, ne whitelist.
 #
 # Neznámý stav = „nenabíjí" (bezpečnější směr).
 CHARGING_STATUSES = {"charging"}
@@ -169,12 +172,29 @@ class SchargeChargingSwitch(SchargeEntity, SwitchEntity):
             raise HomeAssistantError(
                 f"Wallbox odmítl Authorize {purpose} na konektoru "
                 f"{self._connector_id} ({current} A) — stav nabíjení se nezměnil. "
-                f"Wallbox tenhle příkaz přijme jen ve stavu, kdy dává smysl: Stop "
-                f"když session běží, Start když ji lze založit. Časté příčiny: auto "
-                f"není zapojené, session už sama skončila (auto dosáhlo svého limitu "
-                f"SoC), nebo se právě nabíjí a Start je zbytečný. Aktuální stav "
-                f"konektoru: {self._charge_status!r}."
+                f"Aktuální stav konektoru: {self._charge_status!r}. "
+                + self._reject_hint(purpose)
             )
+
+    def _reject_hint(self, purpose: str) -> str:
+        """Rada podle stavu — obecné „nedává to smysl" uživateli nepomůže."""
+        status = (self._charge_status or "").strip().lower()
+        if status == "finish":
+            # Pozorováno 2026-07-16: ve 'finish' wallbox odmítá i Start. Jak z toho
+            # stavu ven, ZATÍM NEVÍME — netvrdit uživateli nic, co jsme neověřili.
+            return (
+                "Session skončila (typicky auto dosáhlo svého limitu SoC), ale kabel "
+                "zůstal v zásuvce. Ve stavu 'finish' wallbox odmítá i Start, takže "
+                "nabíjení z HA znovu rozjet nejde. Zkus odpojit a znovu zapojit kabel. "
+                "(Spolehlivá cesta ven z 'finish' zatím není ověřená — pokud na nějakou "
+                "přijdeš, dej vědět do issues.)"
+            )
+        if status == "idle":
+            return "Konektor je prázdný — bez zapojeného auta není co spustit ani zastavit."
+        if status == "charging" and purpose == "Start":
+            return "Už se nabíjí, Start je zbytečný. Proud měň sliderem „nabíjecí proud“."
+        return ("Wallbox příkaz přijme jen ve stavu, kdy dává smysl: Stop když session "
+                "běží, Start když ji lze založit.")
         started = purpose == "Start"
         self._optimistic = started
         # Start: drž `on` přes fázi `wait`, než auto začne brát proud.
@@ -274,7 +294,9 @@ class SchargePnCSwitch(_ConfirmedConnectorSwitch):
 
     _attr_field = "pnc_status"
     _label = "Plug and Charge"
-    _attr_icon = "mdi:ev-plug-type2"
+    # Shodná ikona s tlačítkem „PnC open" — PnC není zámek (do v0.7.1 měla
+    # obě PnC tlačítka lock/lock-open-variant, tedy k nerozeznání od západky).
+    _attr_icon = "mdi:flash-auto"
 
     def __init__(self, coordinator: SchargeCoordinator, connector_id: int) -> None:
         super().__init__(coordinator, connector_id, "pnc_switch")

@@ -75,12 +75,40 @@ Wallbox má 2 zásuvky (konektory). V wire protokolu (JSON) jsou označené
 |---|---|---|
 | `sensor.wallbox_s_charge_connector_1_voltage` | V | Napětí konektor 1 |
 | `sensor.wallbox_s_charge_connector_1_current` | A | Proud konektor 1 |
-| `sensor.wallbox_s_charge_connector_1_power` | W | Okamžitý výkon konektor 1 |
+| `sensor.wallbox_s_charge_connector_1_power` | **kW** | Okamžitý výkon konektor 1 |
 | `sensor.wallbox_s_charge_connector_1_energy_session` | kWh | Energie aktuální session |
 | `sensor.wallbox_s_charge_connector_1_charging_time` | text | Čas nabíjení (H:M:S) |
-| `sensor.wallbox_s_charge_connector_1_status` | text | idle / charging / ... |
+| `sensor.wallbox_s_charge_connector_1_status` | text | `idle` / `wait` / `charging` / `finish` — viz slovník níže |
 
 Pro **konektor 2** to samé (`sensor.wallbox_s_charge_connector_2_voltage`, ...).
+
+#### Slovník `..._status` (chargeStatus)
+
+Výrobce ho nikde nedokumentuje — tohle je poskládané z pozorování na FW
+`E3P3_H_1.1.1_R5190`. Může být neúplný.
+
+| Stav | Význam |
+|---|---|
+| `idle` | kabel odpojený, nic neběží |
+| `wait` | **přechodně** po `Authorize Start`, než auto začne brát proud |
+| `charging` | reálně nabíjí |
+| `finish` | **session skončila, ale kabel zůstal v zásuvce** — typicky když auto dosáhne svého limitu SoC |
+
+> **⚠️ Ze stavu `finish` wallbox odmítá i `Authorize Start`** — nabíjení už z HA
+> znovu rozjet nejde, ani po zvýšení limitu SoC v autě. Pomůže odpojit a znovu
+> zapojit kabel. Spolehlivá cesta ven z `finish` **není ověřená**; pokud na
+> nějakou přijdeš, ozvi se do issues.
+>
+> `finish` je i důvod, proč integrace hlásí stav nabíjení **whitelistem**
+> (`on` jen pro `charging`). Do v0.6.0 se používal blacklist `!= 'idle'`, který
+> `finish` hlásil jako „nabíjím" — uživatel dal Stop a wallbox ho odmítl, protože
+> žádná session neběžela.
+
+> **Poznámka k jednotkám výkonu:** `suggested_unit_of_measurement` platí **jen při
+> vytvoření entity**. Oprava jednotky z v0.5.4 (W → kW) proto zabrala jen novým
+> instalacím — kdo integraci provozoval dřív, může mít v registry zamrzlé `W`.
+> Pozná se to tak, že `states()` vrací hodnoty ve wattech. Řešení: v *Nastavení →
+> Entity → [entita] → Jednotka* přepnout ručně na kW.
 
 ### Binary sensors
 
@@ -109,7 +137,7 @@ Pro **konektor 2** to samé (`sensor.wallbox_s_charge_connector_2_voltage`, ...)
 | `sensor.wallbox_s_charge_charging_sessions` | count | Počet session |
 | `sensor.wallbox_s_charge_meter_voltage` | V | Napětí externího MID metru (pokud je) |
 | `sensor.wallbox_s_charge_meter_current` | A | Proud externího MID metru |
-| `sensor.wallbox_s_charge_meter_power` | W | Výkon externího MID metru |
+| `sensor.wallbox_s_charge_meter_power` | **kW** | Výkon externího MID metru (viz poznámka o jednotkách níže) |
 | `sensor.wallbox_s_charge_wifi_rssi` | dBm | WiFi signál wallboxu |
 | `sensor.wallbox_s_charge_firmware_version` | text | Firmware verze |
 | `sensor.wallbox_s_charge_evse_type` | text | Model / typ wallboxu |

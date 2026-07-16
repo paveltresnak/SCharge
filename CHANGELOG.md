@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.7.2] — 2026-07-16
+
+Komplexní prohlídka dokumentace proti realitě — vyprovokovaná uživatelem:
+*„ak dobre pozeram, tak nemate uplne aktualizovane tie premenne… nezodpovedaju
+uplne tomu najnovsiemu stavu."* Měl pravdu. Plus objevený nový stav `finish`.
+
+### 🔑 Nový stav: `finish` — a nemile překvapí
+
+Slovník `chargeStatus` je nově **čtyřprvkový** (FW `E3P3_H_1.1.1_R5190`):
+
+| Stav | Význam |
+|---|---|
+| `idle` | kabel odpojený |
+| `wait` | **přechodně** po `Authorize Start`, než auto začne brát proud |
+| `charging` | reálně nabíjí |
+| **`finish`** | **session skončila, kabel zůstal v zásuvce** (auto na svém limitu SoC) |
+
+**⚠️ Ze stavu `finish` wallbox odmítá i `Authorize Start`** — nabíjení už z HA
+znovu rozjet nejde, ani po zvýšení limitu SoC v autě. Pomůže odpojit a znovu
+zapojit kabel; spolehlivá cesta ven **není ověřená**.
+
+Oprava `is_on` z v0.6.1/0.6.2 tím dostala potvrzení: `finish` je přesně ten stav,
+který blacklist `!= 'idle'` hlásil jako „nabíjím" a kvůli kterému Stop selhával.
+Whitelist ho správně hlásí jako `off` — ověřeno u uživatele.
+(Dřívější domněnka, že tenhle stav je `wait`, byla mylná — `wait` je jen přechodový.)
+
+### Changed
+- **Chybová hláška radí podle stavu**, ne obecně. Ve `finish` vysvětlí, co se
+  stalo a proč Start neprojde; v `idle` řekne, že je konektor prázdný; při
+  `charging` + Start, že je příkaz zbytečný. Dřív bylo pro všechny stavy jedno
+  obecné „příkaz nedává smysl", ze kterého uživatel nepoznal nic.
+- **Ikony: PnC už nevypadá jako zámek.** Obě PnC tlačítka měla `mdi:lock` /
+  `mdi:lock-open-variant` — tedy k nerozeznání od západky konektoru, přestože
+  jde o úplně jiný pojem (autorizace). Nově `mdi:flash-auto` (open) a
+  `mdi:card-account-details` (close); switch PnC sjednocen na `mdi:flash-auto`.
+- Chybová hláška u tlačítek tvrdila, že „zámek nejde ovládat bez zapojeného
+  kabelu" — **nepravda**, ověřeno: wallbox zámek bez auta přijme. Odstraněno.
+
+### Fixed — dokumentace neodpovídala realitě
+- **`connector_N_power` a `meter_power`: README uvádělo `W`, správně je `kW`.**
+  Pozůstatek stavu před v0.5.3. (Ověřeno strojově proti živým entitám: z 15
+  senzorů seděly jednotky u 14.)
+- **`..._status`: README tvrdilo „idle / charging / …"** — doplněn celý slovník.
+- Doplněno, že **`suggested_unit_of_measurement` platí jen při vytvoření entity**,
+  takže oprava jednotky z v0.5.4 (W → kW) **zabrala jen novým instalacím**. Kdo
+  integraci provozoval dřív, může mít v registry zamrzlé `W` a `states()` mu vrací
+  watty. Řešení: přepnout jednotku ručně v *Nastavení → Entity*.
+
 ## [0.7.1] — 2026-07-16
 
 ### Fixed

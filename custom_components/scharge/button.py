@@ -43,14 +43,14 @@ BUTTONS: list[SchargeButtonDescription] = [
         key="c_1_pnc_open",
         translation_key="c_1_pnc_open",
         name="Connector 1 PnC open",
-        icon="mdi:lock-open-variant",
+        icon="mdi:flash-auto",
         press_fn=lambda c: c.send_pnc_set(1, "open"),
     ),
     SchargeButtonDescription(
         key="c_1_pnc_close",
         translation_key="c_1_pnc_close",
         name="Connector 1 PnC close",
-        icon="mdi:lock",
+        icon="mdi:card-account-details",
         press_fn=lambda c: c.send_pnc_set(1, "close"),
     ),
     SchargeButtonDescription(
@@ -71,14 +71,14 @@ BUTTONS: list[SchargeButtonDescription] = [
         key="c_2_pnc_open",
         translation_key="c_2_pnc_open",
         name="Connector 2 PnC open",
-        icon="mdi:lock-open-variant",
+        icon="mdi:flash-auto",
         press_fn=lambda c: c.send_pnc_set(2, "open"),
     ),
     SchargeButtonDescription(
         key="c_2_pnc_close",
         translation_key="c_2_pnc_close",
         name="Connector 2 PnC close",
-        icon="mdi:lock",
+        icon="mdi:card-account-details",
         press_fn=lambda c: c.send_pnc_set(2, "close"),
     ),
 ]
@@ -123,7 +123,6 @@ class SchargeButton(SchargeEntity, ButtonEntity):
         if ok is False:
             raise HomeAssistantError(
                 f"Wallbox odmítl akci {self.entity_description.name!r} "
-                f"— nic se nezměnilo. Příkaz přijme jen ve stavu, kdy dává "
-                f"smysl (např. zámek nejde ovládat bez zapojeného kabelu). "
+                f"— nic se nezměnilo. Příkaz přijme jen ve stavu, kdy dává smysl. "
                 f"Stav konektorů: {self.coordinator.status_summary()}."
             )
