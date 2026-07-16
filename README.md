@@ -116,6 +116,24 @@ Pro **konektor 2** to samé (`sensor.wallbox_s_charge_connector_2_voltage`, ...)
 
 ### Number (ovládání)
 
+> ## ⚠️ Posunutí slideru „nabíjecí proud" SPUSTÍ NABÍJENÍ
+>
+> Není to bug, ale plyne to z protokolu a snadno tím člověk nechtěně nastartuje auto.
+> Nastavení proudu se posílá jako **`Authorize` s `purpose="Start"`** — a ten příkaz
+> **zakládá session**, nejen mění proud. Wallbox jinou páku na proud nenabízí
+> (`LoadBalance` je jen building-level strop, který si navíc sám resetuje zpět).
+>
+> **Důsledky:**
+> - Máš-li slider na kartě, i letmé zavadění o něj rozjede nabíjení.
+> - S vypnutým PnC je to naopak *žádoucí* — je to jediná cesta, jak nabíjení
+>   spustit z HA (spolu se switchem *Nabíjení konektor X*, který posílá totéž).
+> - **V automatizaci vždy nejdřív ověř, že auto reálně nabíjí** (`power > 1 kW`),
+>   a teprve pak proud nastavuj — jinak ti regulační smyčka nabíjení sama zapne
+>   ve chvíli, kdy jsi ho vypnul. Vzor níže tuhle podmínku má a **není dekorativní**.
+>
+> Zjištěno 2026-07-16 uživatelem integrace: *„nechtiac som zavadil o posuvnik prudu,
+> cim sa nabijanie aktivovalo"*.
+
 > **⚠️ Tyhle entity mají entity_id závislé na jazyku HA.** Na rozdíl od sensorů a buttonů
 > (které mají napevno anglický `name`) je `number` pojmenovaný jen přes `translation_key`,
 > takže se slug tvoří z **lokalizovaného** názvu. **Ověř si skutečné entity_id**

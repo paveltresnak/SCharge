@@ -82,6 +82,17 @@ class SchargeChargeCurrent(SchargeEntity, NumberEntity):
 
     Uses Authorize action with purpose=Start + new current to throttle active
     charging session. More granular than LoadBalance (building-wide ceiling).
+
+    ⚠️ POZOR: NASTAVENÍ PROUDU SPUSTÍ NABÍJENÍ.
+    `Authorize` s purpose="Start" **zakládá session**, nejen mění proud —
+    ověřeno 2026-07-16 uživatelem, který o slider nechtěně zavadil a rozjel tím
+    auto. Wallbox jinou páku na proud nemá (LoadBalance je jen building-level
+    strop a sám se resetuje zpět), takže to nejde obejít; je to vlastnost
+    protokolu, ne chyba.
+
+    Kdo bude tuhle entitu upravovat: NEPOSÍLAT proud „preventivně" mimo běžící
+    session (např. na obnovu stavu po startu HA nebo jako init) — zapnulo by to
+    nabíjení. Regulační smyčky musí mít podmínku `power > 1 kW`.
     """
 
     _attr_native_min_value = CHARGE_CURRENT_MIN
