@@ -49,11 +49,14 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: SchargeCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([
-        SchargeBridgeSwitch(coordinator),
-        SchargeChargingSwitch(coordinator, 1),
-        SchargeChargingSwitch(coordinator, 2),
-    ])
+    entities: list[SwitchEntity] = [SchargeBridgeSwitch(coordinator)]
+    for cid in (1, 2):
+        entities += [
+            SchargeChargingSwitch(coordinator, cid),
+            SchargeLockSwitch(coordinator, cid),
+            SchargePnCSwitch(coordinator, cid),
+        ]
+    async_add_entities(entities)
 
 
 class SchargeBridgeSwitch(SchargeEntity, SwitchEntity):
@@ -186,3 +189,96 @@ class SchargeChargingSwitch(SchargeEntity, SwitchEntity):
     async def async_turn_off(self, **kwargs) -> None:
         _LOGGER.info("Charging switch OFF — konektor %d", self._connector_id)
         await self._authorize("Stop")
+
+
+class _ConfirmedConnectorSwitch(SchargeEntity, SwitchEntity):
+    """Báze pro switche, které jen překlápí jedno pole konektoru.
+
+    Sdílí pravidlo celé integrace: **nepřepínat optimisticky**. Stav se změní
+    až když ho potvrdí telemetrie wallboxu; když wallbox příkaz odmítne
+    (`result: false`), vyhodí se HomeAssistantError a stav se nehne.
+
+    Potomek dodá: `_attr_field` (pole v telemetrii), `_command(on: bool)`
+    a `_label`.
+    """
+
+    _attr_has_entity_name = True
+    _attr_field: str = ""
+    _label: str = ""
+
+    def __init__(self, coordinator: SchargeCoordinator, connector_id: int,
+                 key: str) -> None:
+        super().__init__(coordinator)
+        self._connector_id = connector_id
+        self._attr_unique_id = f"{coordinator.serial}_c_{connector_id}_{key}"
+        self._attr_translation_key = f"c_{connector_id}_{key}"
+
+    @property
+    def is_on(self) -> bool | None:
+        val = self.coordinator.connector_attr(self._connector_id, self._attr_field)
+        return None if val is None else bool(val)
+
+    async def _command(self, turn_on: bool) -> bool:
+        raise NotImplementedError
+
+    async def _apply(self, turn_on: bool) -> None:
+        _LOGGER.info("%s %s — konektor %d", self._label,
+                     "ON" if turn_on else "OFF", self._connector_id)
+        if not await self._command(turn_on):
+            raise HomeAssistantError(
+                f"Wallbox odmítl změnu {self._label!r} na konektoru "
+                f"{self._connector_id} — stav se nezměnil."
+            )
+        # Stav nepřepisujeme: přijde s další telemetrií (á ~10 s).
+        self.async_write_ha_state()
+
+    async def async_turn_on(self, **kwargs) -> None:
+        await self._apply(True)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        await self._apply(False)
+
+
+class SchargeLockSwitch(_ConfirmedConnectorSwitch):
+    """Elektronická západka konektoru. `on` = ZAMČENO.
+
+    ⚠️ Pozor na inverzi: `binary_sensor..._lock` má `device_class=lock`, kde
+    HA konvence je `on` = ODEMČENO (device classy mají „problem semantic").
+    Proto tam v kódu je `not lock_status`. Tady je to switch bez device_class,
+    kde uživatel čeká `on` = zamčeno → `lock_status` se bere **bez inverze**.
+    Obě entity tak ukazují opačnou hodnotu a je to správně.
+    """
+
+    _attr_field = "lock_status"
+    _label = "Zámek"
+    _attr_icon = "mdi:lock"
+
+    def __init__(self, coordinator: SchargeCoordinator, connector_id: int) -> None:
+        super().__init__(coordinator, connector_id, "lock_switch")
+
+    async def _command(self, turn_on: bool) -> bool:
+        return await self.coordinator.send_electronic_lock(
+            self._connector_id, "lock" if turn_on else "unlock")
+
+
+class SchargePnCSwitch(_ConfirmedConnectorSwitch):
+    """Plug-and-Charge. `on` = nabíjení začne po zapojení samo (bez autorizace).
+
+    Wire protokol tomu říká `open` (= bez autorizace) / `close` (= autorizace
+    nutná), což je matoucí — proto tu překlad na on/off.
+
+    `off` je scénář „nabíjej jen na povel z HA": auto se po zapojení samo
+    nerozjede a nabíjení spustíš switchem *Nabíjení konektor X* (nebo, pozor,
+    i pohnutím slideru proudu — viz number.py).
+    """
+
+    _attr_field = "pnc_status"
+    _label = "Plug and Charge"
+    _attr_icon = "mdi:ev-plug-type2"
+
+    def __init__(self, coordinator: SchargeCoordinator, connector_id: int) -> None:
+        super().__init__(coordinator, connector_id, "pnc_switch")
+
+    async def _command(self, turn_on: bool) -> bool:
+        return await self.coordinator.send_pnc_set(
+            self._connector_id, "open" if turn_on else "close")

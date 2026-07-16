@@ -74,7 +74,11 @@
         "switch": {
             "bridge": {"name": "Můstek HA"},
             "c_1_charging": {"name": "Nabíjení konektor 1"},
-            "c_2_charging": {"name": "Nabíjení konektor 2"}
+            "c_2_charging": {"name": "Nabíjení konektor 2"},
+            "c_1_lock_switch": {"name": "Zámek konektor 1"},
+            "c_2_lock_switch": {"name": "Zámek konektor 2"},
+            "c_1_pnc_switch": {"name": "Plug and Charge konektor 1"},
+            "c_2_pnc_switch": {"name": "Plug and Charge konektor 2"}
         }
     }
 }

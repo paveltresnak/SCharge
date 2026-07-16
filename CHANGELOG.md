@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] — 2026-07-16
+
+Na přání uživatele integrace: *„nez budem preprogramovavat cele templaty —
+existuje sanca, ze tie ON/OFF buttony budu niekedy k dispozicii vo verzii
+Switch? Teda ze ho bude mozne Toggle?"* Ano, existuje. Tady je.
+
+### Added — zámek a Plug-and-Charge jako přepínače
+
+Dosud šly ovládat jen dvojicí tlačítek (*Lock* + *Unlock*, *PnC open* +
+*PnC close*), takže na kartě musely být dva prvky a stav se musel tahat zvlášť
+z `binary_sensor`. Nově jedna entita, která ukazuje stav i ovládá:
+
+| Entity (CS HA) | `on` znamená |
+|---|---|
+| `switch...zamek_konektor_{1,2}` | **zamčeno** |
+| `switch...plug_and_charge_konektor_{1,2}` | **nabíjení začne po zapojení samo** (bez autorizace) |
+
+(Na anglickém HA `switch...connector_{1,2}_lock` / `..._plug_and_charge` —
+entity_id je lokalizované, viz README.)
+
+**Tlačítka zůstávají.** Nejsou deprecated a nikam nemizí — kdo si na nich
+postavil šablony, nemusí sahat na nic. Přepínače přibyly vedle.
+
+Platí pro ně stejné pravidlo jako pro zbytek integrace: **nepřepínají se
+optimisticky.** Stav se změní, až ho potvrdí telemetrie wallboxu; když wallbox
+příkaz odmítne, přijde chyba a stav se nehne.
+
+> **⚠️ Zámek je oproti `binary_sensor..._lock` schválně obrácený.** Ten má
+> `device_class: lock`, kde HA konvence znamená `on` = **odemčeno** (device
+> classy mají „problem semantic" — `on` = abnormální stav). U switche uživatel
+> čeká `on` = zamčeno. Obě entity proto ukazují opačnou hodnotu a obě mají
+> pravdu. Ověřeno na živém wallboxu.
+
+> **Poznámka k PnC:** wire protokol tomu říká `open` (bez autorizace) a `close`
+> (autorizace nutná), což je matoucí — switch to překládá na on/off. `off` je
+> scénář „nabíjej jen na povel z HA".
+
 ## [0.6.2] — 2026-07-16
 
 Znovu díky reportu uživatele: *„Status sa po stlaceni ukazal, pisal WAIT, potom

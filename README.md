@@ -172,6 +172,8 @@ Pro **konektor 2** to samé (`sensor.wallbox_s_charge_connector_2_voltage`, ...)
 | Entity | Stavy | Popis |
 |---|---|---|
 | `switch.wallbox_s_charge_bridge` (CS: „Můstek HA", EN: „Bridge") | `on` *(default)* / `off` | Vypni, když se chceš připojit na wallbox přes mobilní aplikaci S-charge. |
+| `switch...zamek_konektor_{1,2}` (CS) / `switch...connector_{1,2}_lock` (EN) | `on` = **zamčeno** | Elektronická západka konektoru. Nahrazuje dvojici tlačítek *Lock* / *Unlock* jedním přepínačem. |
+| `switch...plug_and_charge_konektor_{1,2}` (CS) / `..._plug_and_charge` (EN) | `on` = **bez autorizace** | Plug-and-Charge. `on` = po zapojení se nabíjení rozjede samo; `off` = nabíjej jen na povel z HA. Nahrazuje *PnC open* / *PnC close*. |
 | `switch...nabijeni_konektor_{1,2}` (CS) / `switch...connector_{1,2}_charging` (EN) | `on` / `off` | Start/stop nabíjení na konektoru. **⚠️ Neověřeno na reálném voze — viz níže.** entity_id je lokalizované (jako u `number`) — ověř ve *States*. |
 
 #### Můstek HA
@@ -185,6 +187,23 @@ Pro **konektor 2** to samé (`sensor.wallbox_s_charge_connector_2_voltage`, ...)
 > **Proč se port uvolňuje (od v0.6.0):** wallbox si pamatuje poslední endpoint a připojuje se tam bez ohledu na to, kdo broadcastuje. Když WS server dál poslouchal, HA jeho spojení přijímal a neobsluhoval → hromadily se desítky spojení ve `FIN_WAIT1` a link byl mrtvý, dokud nevypršely TCP timeouty (~3 min). Do v0.5.4 to postihovalo i samotný toggle `off`→`on`.
 
 Switch najdeš v **Settings → Devices & Services → S-charge Wallbox → Configuration entities** (kategorie CONFIG).
+
+#### Zámek a Plug-and-Charge (od v0.7.0)
+
+Jedna entita místo dvojice tlačítek — ukazuje stav i ovládá. **Tlačítka
+`button...lock` / `_unlock` / `_pnc_open` / `_pnc_close` zůstávají** a nejsou
+deprecated; kdo na nich má postavené šablony, nemusí měnit nic.
+
+> **⚠️ `switch...zamek` je oproti `binary_sensor..._lock` schválně obrácený.**
+> Binary sensor má `device_class: lock`, kde HA konvence je `on` = **odemčeno**
+> (device classy mají „problem semantic" — `on` = abnormální stav). U switche
+> uživatel čeká `on` = zamčeno. Obě entity tedy ukazují opačnou hodnotu a obě
+> mají pravdu. Nesnaž se je „sjednotit".
+
+> **PnC:** wire protokol používá `open` (bez autorizace) / `close` (autorizace
+> nutná). Switch to překládá: `on` = open. **`off` je scénář „nabíjej jen na
+> povel z HA"** — auto se po zapojení samo nerozjede a nabíjení spustíš
+> switchem *Nabíjení konektor X*.
 
 #### Nabíjení konektor 1/2
 

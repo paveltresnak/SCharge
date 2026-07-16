@@ -74,7 +74,11 @@
         "switch": {
             "bridge": {"name": "Bridge"},
             "c_1_charging": {"name": "Connector 1 charging"},
-            "c_2_charging": {"name": "Connector 2 charging"}
+            "c_2_charging": {"name": "Connector 2 charging"},
+            "c_1_lock_switch": {"name": "Connector 1 lock"},
+            "c_2_lock_switch": {"name": "Connector 2 lock"},
+            "c_1_pnc_switch": {"name": "Connector 1 Plug and Charge"},
+            "c_2_pnc_switch": {"name": "Connector 2 Plug and Charge"}
         }
     }
 }

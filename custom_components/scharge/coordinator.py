@@ -429,13 +429,25 @@ class SchargeCoordinator:
 
     # ─── Stav konektorů ────────────────────────────────────────────────────────
 
+    def connector_attr(self, connector_id: int, attr: str):
+        """Pole konektoru (1/2) ze SynchroStatus, fallback DeviceData.
+
+        Wire protokol používá connectorMain/connectorVice; v UI čísla 1/2.
+        """
+        if connector_id == 1:
+            ss = self.synchro_status.connector_main if self.synchro_status else None
+            dd = self.device_data.connector_main if self.device_data else None
+        else:
+            ss = self.synchro_status.connector_vice if self.synchro_status else None
+            dd = self.device_data.connector_vice if self.device_data else None
+        for src in (ss, dd):
+            if src is not None and hasattr(src, attr):
+                return getattr(src, attr)
+        return None
+
     def connector_status(self, connector_id: int) -> str | None:
-        """Aktuální chargeStatus konektoru (1/2), nebo None když ho neznáme."""
-        ss = self.synchro_status
-        if ss is None:
-            return None
-        src = ss.connector_main if connector_id == 1 else ss.connector_vice
-        return getattr(src, "charge_status", None) if src else None
+        """Aktuální chargeStatus konektoru (1/2): idle / wait / charging."""
+        return self.connector_attr(connector_id, "charge_status")
 
     def _log_status_transitions(self) -> None:
         """Zaloguj KAŽDOU změnu chargeStatus na INFO.
