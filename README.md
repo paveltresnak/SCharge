@@ -92,8 +92,13 @@ Pro **konektor 2** to samé (`sensor.wallbox_s_charge_connector_2_voltage`, ...)
 | `binary_sensor.wallbox_s_charge_connector_2_connected` | Auto je připojené (konektor 2) |
 | `binary_sensor.wallbox_s_charge_connector_2_lock` | Elektronický zámek konektoru 2 |
 | `binary_sensor.wallbox_s_charge_connector_2_pnc` | Plug-and-Charge stav (konektor 2) |
-| `binary_sensor.wallbox_s_charge_nwire_exist` | N-Wire detekován (diagnostika) |
-| `binary_sensor.wallbox_s_charge_nwire_closed` | N-Wire relé sepnuto (diagnostika) |
+| `binary_sensor...n_wire_exists` | N-Wire detekován (diagnostika) — **vypnuté by default**, viz níže |
+| `binary_sensor...n_wire_closed` | N-Wire relé sepnuto (diagnostika) — **vypnuté by default**, viz níže |
+
+> **N-Wire entity jsou ve výchozím stavu zakázané** (`disabled_by: integration`) — jsou to
+> diagnostické entity, ve *States* je neuvidíš, dokud je nepovolíš v *Nastavení → Zařízení
+> a služby → S-charge Wallbox → entity*. Jejich entity_id navíc obsahuje **sériové číslo**
+> wallboxu (např. `binary_sensor.wallbox_s_charge_2100…_n_wire_exists`).
 
 ### Globální sensors
 
@@ -111,16 +116,25 @@ Pro **konektor 2** to samé (`sensor.wallbox_s_charge_connector_2_voltage`, ...)
 
 ### Number (ovládání)
 
-| Entity | Rozsah | Popis |
-|---|---|---|
-| `number.wallbox_s_charge_connector_1_charging_current` | 6–32 A | **Nabíjecí proud konektoru 1** — reálný per-session throttle (Authorize + nový proud). Toto je doporučená cesta PV modulace. |
-| `number.wallbox_s_charge_connector_2_charging_current` | 6–32 A | Nabíjecí proud konektoru 2 |
-| `number.wallbox_s_charge_load_balance` | 4000–14600 W | Globální strop výkonu (LoadBalance). Hrubší než proud, ovlivňuje oba konektory dohromady. |
+> **⚠️ Tyhle entity mají entity_id závislé na jazyku HA.** Na rozdíl od sensorů a buttonů
+> (které mají napevno anglický `name`) je `number` pojmenovaný jen přes `translation_key`,
+> takže se slug tvoří z **lokalizovaného** názvu. **Ověř si skutečné entity_id**
+> v *Developer Tools → States* (filtr `nabijeci` / `charging`).
+
+| Entity (EN HA) | Entity (CS HA) | Rozsah | Popis |
+|---|---|---|---|
+| `number.wallbox_s_charge_connector_1_charging_current` | `number.wallbox_s_charge_konektor_1_nabijeci_proud` | 6–32 A | **Nabíjecí proud konektoru 1** — reálný per-session throttle (Authorize + nový proud). Toto je doporučená cesta PV modulace. |
+| `number.wallbox_s_charge_connector_2_charging_current` | `number.wallbox_s_charge_konektor_2_nabijeci_proud` | 6–32 A | Nabíjecí proud konektoru 2 |
+| `number.wallbox_s_charge_load_balance` | *(stejné)* | 4000–14600 W | Globální strop výkonu (LoadBalance). Hrubší než proud, ovlivňuje oba konektory dohromady. |
+
+> **Pozor na `unknown`:** dokud na konektoru neběží session (typicky odpojené auto), wallbox
+> hlásí `reserveCurrent = 0`. To není platný proud (rozsah je 6–32 A), takže entita od
+> **v0.6.0** vrací `unknown` místo nuly. Dřív hlásila 0 a slider ukazoval jako minimum 0.
 
 > **Proud (A) vs LoadBalance (W):** pro modulaci dle PV přebytku používej
-> **per-konektor `charging_current` (A)** — moduluje konkrétní probíhající session
-> jemně po 1 A. `load_balance` (W) je hrubý společný strop. Reálné nasazení
-> (regulační smyčka) jede přes ampéry.
+> **per-konektor nabíjecí proud (A)** — moduluje konkrétní probíhající session
+> jemně po 1 A. `load_balance` (W) je hrubý společný strop, který si wallbox stejně
+> sám resetuje zpět na 14600. Reálné nasazení (regulační smyčka) jede přes ampéry.
 
 ### Buttons (ovládání)
 
@@ -140,7 +154,7 @@ Pro **konektor 2** to samé (`sensor.wallbox_s_charge_connector_2_voltage`, ...)
 | Entity | Stavy | Popis |
 |---|---|---|
 | `switch.wallbox_s_charge_bridge` (CS: „Můstek HA", EN: „Bridge") | `on` *(default)* / `off` | Vypni, když se chceš připojit na wallbox přes mobilní aplikaci S-charge. |
-| `switch.wallbox_s_charge_nabijeni_konektor_{1,2}` | `on` / `off` | Start/stop nabíjení na konektoru. **⚠️ Neověřeno na reálném voze — viz níže.** |
+| `switch...nabijeni_konektor_{1,2}` (CS) / `switch...connector_{1,2}_charging` (EN) | `on` / `off` | Start/stop nabíjení na konektoru. **⚠️ Neověřeno na reálném voze — viz níže.** entity_id je lokalizované (jako u `number`) — ověř ve *States*. |
 
 #### Můstek HA
 
@@ -195,6 +209,9 @@ vlastní (výkon FVE, spotřeba domu, výkon na bodě připojení / grid).
         target_a: "{{ [[ (actual_a + delta_a) | int, 6] | max, 32] | min }}"
     - service: number.set_value
       target:
+        # ⚠️ entity_id je LOKALIZOVANÉ podle jazyka HA — ověř v Developer Tools → States.
+        # EN HA: number.wallbox_s_charge_connector_1_charging_current
+        # CS HA: number.wallbox_s_charge_konektor_1_nabijeci_proud
         entity_id: number.wallbox_s_charge_connector_1_charging_current
       data:
         value: "{{ target_a }}"
