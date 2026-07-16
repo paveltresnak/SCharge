@@ -90,15 +90,21 @@ Výrobce ho nikde nedokumentuje — tohle je poskládané z pozorování na FW
 | Stav | Význam |
 |---|---|
 | `idle` | kabel odpojený, nic neběží |
-| `wait` | **přechodně** po `Authorize Start`, než auto začne brát proud |
+| `wait` | **přechodně** po `Authorize Start`, než auto začne brát proud (~4 s) |
 | `charging` | reálně nabíjí |
-| `finish` | **session skončila, ale kabel zůstal v zásuvce** — typicky když auto dosáhne svého limitu SoC |
+| `finish` | **session skončila, ale kabel zůstal v zásuvce** — po Stopu i když session ukončí samo auto (limit SoC) |
 
-> **⚠️ Ze stavu `finish` wallbox odmítá i `Authorize Start`** — nabíjení už z HA
-> znovu rozjet nejde, ani po zvýšení limitu SoC v autě. Pomůže odpojit a znovu
-> zapojit kabel. Spolehlivá cesta ven z `finish` **není ověřená**; pokud na
-> nějakou přijdeš, ozvi se do issues.
->
+**Ověřený stavový automat** (2026-07-16, plný cyklus 2× po sobě na reálném voze):
+
+```
+charging --Stop--> finish --Start--> wait --> charging
+   ~4 s              ~4 s
+```
+
+Start ze stavu `finish` tedy **funguje** — nabíjení jde z HA rozjet znovu, bez
+přepojování kabelu. Když ho wallbox přesto odmítne, stav za to nemůže: nepřijme
+ho **auto**, typicky protože dosáhlo svého limitu SoC.
+
 > `finish` je i důvod, proč integrace hlásí stav nabíjení **whitelistem**
 > (`on` jen pro `charging`). Do v0.6.0 se používal blacklist `!= 'idle'`, který
 > `finish` hlásil jako „nabíjím" — uživatel dal Stop a wallbox ho odmítl, protože

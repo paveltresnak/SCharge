@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.7.3] — 2026-07-16
+
+Plný cyklus konečně otestován **na reálném nabíjejícím voze** (Peugeot e-2008,
+9 kW, konektor 2). Výsledek vyvrátil tvrzení z v0.7.2 — opravujeme.
+
+### ✅ Ověřený stavový automat
+
+```
+charging --Stop--> finish --Start--> wait --> charging
+   ~4 s              ~4 s
+```
+
+Proběhlo **2× po sobě**, všechny čtyři příkazy `ACK result=true` do 0,3–0,4 s:
+
+| Fáze | Výsledek |
+|---|---|
+| Stop při 7,59 kW / 10,81 A | `charging → finish`, výkon **0,00 kW** |
+| Start | `finish → wait → charging`, **10,72 kW** |
+| Stop podruhé | `charging → finish`, **0,00 kW** |
+| Start (obnova) | `finish → wait → charging` |
+
+### Fixed — v0.7.2 tvrdila nepravdu o stavu `finish`
+
+Psali jsme: *„Ze stavu `finish` wallbox odmítá i Authorize Start — nabíjení už
+z HA znovu rozjet nejde… Pomůže odpojit a znovu zapojit kabel."*
+
+**Není to pravda.** Start z `finish` **funguje** a kabel přepojovat netřeba.
+Ta věta by uživatele posílala k zásuvce úplně zbytečně.
+
+Vzniklo to unáhleným zobecněním jediného hlášení: uživateli byl Start odmítnut,
+když byl konektor ve `finish` — jenže tam session skončila proto, že **auto**
+dosáhlo svého limitu SoC. Odmítal tedy vůz, ne stav. Stejný stav se dvěma
+různými příčinami vypadá v `chargeStatus` identicky.
+
+Chybová hláška u `finish` nově míří na skutečnou příčinu (limit SoC v autě)
+místo doporučení přepojit kabel.
+
+### Potvrzeno (beze změny kódu)
+- **Doba hájení po Startu** (v0.6.2) je správně: `finish → wait → charging` trvá
+  ~4 s, tedy hluboko pod 60s oknem. `wait` je opravdu jen přechodový.
+- **Whitelist `is_on`** (v0.6.1): ve `finish` výkon 0 → switch `off`. Sedí.
+- **Čtení `result` z ACK** (v0.6.0): všechny čtyři příkazy potvrzené a reálně provedené.
+
 ## [0.7.2] — 2026-07-16
 
 Komplexní prohlídka dokumentace proti realitě — vyprovokovaná uživatelem:
@@ -25,6 +68,11 @@ Slovník `chargeStatus` je nově **čtyřprvkový** (FW `E3P3_H_1.1.1_R5190`):
 **⚠️ Ze stavu `finish` wallbox odmítá i `Authorize Start`** — nabíjení už z HA
 znovu rozjet nejde, ani po zvýšení limitu SoC v autě. Pomůže odpojit a znovu
 zapojit kabel; spolehlivá cesta ven **není ověřená**.
+
+> **❌ TOHLE TVRZENÍ JE NEPRAVDIVÉ — opraveno v v0.7.3.** Start z `finish`
+> funguje a kabel přepojovat netřeba; ověřeno plným cyklem na reálném voze.
+> Vzniklo unáhleným zobecněním jediného hlášení. Odstavec nechávám jako záznam
+> toho, co jsme si tehdy mysleli.
 
 Oprava `is_on` z v0.6.1/0.6.2 tím dostala potvrzení: `finish` je přesně ten stav,
 který blacklist `!= 'idle'` hlásil jako „nabíjím" a kvůli kterému Stop selhával.
