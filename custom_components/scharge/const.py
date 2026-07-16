@@ -21,6 +21,18 @@ WS_SUBPROTOCOL = "ocpp1.6"
 # Naměřeno ~0,3 s; 5 s je rezerva na zatížený link.
 ACK_TIMEOUT = 5.0
 
+# ─── Watchdog mrtvého linku ────────────────────────────────────────────────
+# Wallbox drží TCP spojení „ESTABLISHED", ale přestane posílat data — HA pak
+# hlásí connected=True a tiše servíruje zastaralé hodnoty. Pozorováno naživo
+# 2026-07-16: link byl mrtvý 101 minut, auto celou dobu nabíjelo a regulační
+# automatika jela na 100 minut starých číslech. Nic na to neupozornilo.
+WATCHDOG_INTERVAL = 60.0     # s — jak často kontrolovat
+WATCHDOG_STALE = 180.0       # s — bez jediné zprávy = mrtvý link
+                             # (wallbox běžně posílá SynchroData á ~5 s,
+                             #  takže 3 min ticha je s velkou rezervou)
+WATCHDOG_COOLDOWN = 300.0    # s — minimum mezi dvěma zásahy, ať se watchdog
+                             # nezacyklí, když je wallbox opravdu pryč
+
 # LoadBalance range (W) — pro wallbox 22 kW
 LOADBALANCE_MIN = 4000
 LOADBALANCE_MAX = 14600

@@ -25,6 +25,9 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import (
     ACK_TIMEOUT,
+    WATCHDOG_COOLDOWN,
+    WATCHDOG_INTERVAL,
+    WATCHDOG_STALE,
     DEFAULT_BROADCAST_ADDR,
     DEFAULT_BROADCAST_INTERVAL,
     DEFAULT_BROADCAST_PORT,
@@ -122,6 +125,10 @@ class SchargeCoordinator:
         self._ws_server = None
         self._ws_server_task: asyncio.Task | None = None
         self._broadcast_task: asyncio.Task | None = None
+        self._watchdog_task: asyncio.Task | None = None
+
+        # Kdy watchdog naposledy zasáhl (monotonic) — proti zacyklení.
+        self._last_recycle: float | None = None
 
         # Bridge enabled — když False, HA drží krok stranou a nechá wallbox
         # mobilní aplikaci: UDP broadcast zastaven, aktivní WS zavřen A WS
@@ -148,6 +155,9 @@ class SchargeCoordinator:
         # UDP broadcast loop (jen pokud je bridge zapnutý)
         if self._bridge_enabled:
             self._start_broadcast_task()
+
+        # Watchdog mrtvého linku — běží pořád, sám si hlídá stav bridge
+        self._start_watchdog_task()
 
     async def _start_ws_server(self) -> None:
         """Internal: nastartovat WS server (obsadit port), pokud neběží."""
@@ -178,6 +188,85 @@ class SchargeCoordinator:
             _LOGGER.warning("WS server close timeout — forcing down")
         self._ws_server = None
         _LOGGER.info("WS server stopped, port %d released", self.ws_port)
+
+    # ─── Watchdog mrtvého linku ────────────────────────────────────────────────
+
+    def _start_watchdog_task(self) -> None:
+        if self._watchdog_task is None or self._watchdog_task.done():
+            self._watchdog_task = self.hass.async_create_background_task(
+                self._watchdog_loop(),
+                name=f"{DOMAIN}_watchdog_{self.entry_id}",
+            )
+
+    async def _stop_watchdog_task(self) -> None:
+        if self._watchdog_task and not self._watchdog_task.done():
+            self._watchdog_task.cancel()
+            try:
+                await self._watchdog_task
+            except asyncio.CancelledError:
+                pass
+        self._watchdog_task = None
+
+    async def _watchdog_loop(self) -> None:
+        """Hlídá TICHÝ link: TCP drží, ale wallbox přestal posílat data.
+
+        Bez tohohle se HA tváří `connected=True` a servíruje zastaralé hodnoty
+        klidně hodiny — pozorováno naživo 2026-07-16: 101 minut mrtvo, auto
+        celou dobu nabíjelo a regulační automatika jela na starých číslech.
+        Ani jeden signál to nenaznačil, protože z pohledu TCP bylo vše v pořádku.
+        """
+        while True:
+            await asyncio.sleep(WATCHDOG_INTERVAL)
+            try:
+                if not self._bridge_enabled:
+                    continue          # uživatel chce mít wallbox uvolněný pro mobil
+                if self._ws is None or self.last_update is None:
+                    continue          # bez session není co hlídat — řeší broadcast
+                age = time.time() - self.last_update
+                if age < WATCHDOG_STALE:
+                    continue
+                now = time.monotonic()
+                if self._last_recycle is not None and now - self._last_recycle < WATCHDOG_COOLDOWN:
+                    continue          # nedávno jsme zasáhli, dej tomu čas
+                _LOGGER.warning(
+                    "Wallbox mlčí %.0f s, ale TCP session drží → mrtvý link. "
+                    "Restartuji WS server (uvolním port %d), wallbox se vrátí "
+                    "po dalším broadcastu.", age, self.ws_port)
+                self._last_recycle = now
+                await self._restart_link()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                _LOGGER.exception("Watchdog selhal — pokračuji dál")
+
+    async def _restart_link(self) -> None:
+        """Uvolnit port a postavit server znovu — BEZ sáhnutí na bridge switch.
+
+        Přesně ten postup, který na mrtvý link zabírá (ověřeno: návrat do ~40 s).
+        Samotné zavření WS session nestačí: wallbox si pamatuje endpoint a
+        připojil by se zpět na pořád poslouchající server. Port musí zmizet,
+        aby dostal RST a poslechl broadcast.
+
+        `_bridge_enabled` schválně neměníme — je to interní zotavení, ne
+        uživatelův záměr, takže switch „Můstek HA" nemá blikat.
+        """
+        await self._stop_broadcast_task()
+        if self._ws is not None:
+            try:
+                await asyncio.wait_for(self._ws.close(), timeout=2)
+            except (asyncio.TimeoutError, Exception) as e:
+                _LOGGER.debug("WS close při zotavení: %s", e)
+            self._ws = None
+        await self._stop_ws_server()
+        self._fail_pending_acks("link recycled by watchdog")
+        self.connected = False
+        self._notify_entities()
+
+        await asyncio.sleep(2)        # ať se port opravdu uvolní
+
+        await self._start_ws_server()
+        self._start_broadcast_task()
+        _LOGGER.info("Link restartován, čekám na návrat wallboxu")
 
     # ─── Bridge enable/disable (pro sdílení wallboxu s mobilní app) ─────────
 
@@ -251,6 +340,8 @@ class SchargeCoordinator:
         """Zastavit vše. Must not block indefinitely — wallbox often doesn't
         close WS gracefully, so we use timeouts."""
         _LOGGER.info("Stopping SchargeCoordinator")
+        # 0. Watchdog první — ať nezasahuje během teardownu
+        await self._stop_watchdog_task()
         # 1. Cancel UDP broadcast first
         await self._stop_broadcast_task()
         # 2. Close active WS connection (unblocks wait_closed below)
