@@ -5,6 +5,71 @@ All notable changes to this project will be documented in this file.
 Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.0] — 2026-07-17
+
+**První běžný release — konec prereleasů.** HACS ho od teď nabídne normálně,
+bez povolování skryté entity a hledání „Need a different version?".
+
+Jednička neznamená „nic nechybí", ale „všechno, co slibuje, je ověřené na
+reálném hardwaru" — a že se `coordinator.send_*` a entity API nebudou měnit
+z rozmaru.
+
+### Added — watchdog mrtvého linku
+
+Wallbox drží TCP „ESTABLISHED", ale přestane posílat data. HA pak hlásí
+`connected=True` a **tiše servíruje zastaralé hodnoty**. Pozorováno naživo:
+link byl mrtvý **101 minut**, auto celou dobu nabíjelo a regulační automatika
+řídila proud podle 100 minut starých čísel. Nic na to neupozornilo.
+
+Watchdog to hlídá: á 60 s, a když nepřišla zpráva déle než 180 s, uvolní port
+a postaví WS server znovu (samotné zavření session nestačí — wallbox si pamatuje
+endpoint a vrátil by se na pořád poslouchající server). Cooldown 300 s proti
+zacyklení; když si vypneš můstek, mlčí; hlásí zásah jako WARNING, takže je vidět
+i na výchozí úrovni logování.
+
+**Ověřeno v ostrém provozu, 17 zásahů za noc.** Všechny oprávněné — porovnáno
+s telemetrií po 3 s: skutečné ticho 185–239 s, přesně jak watchdog tvrdil.
+
+| | bez watchdogu | s watchdogem |
+|---|---|---|
+| jak často link umírá | ~1,9× za hodinu | ~1,2× za hodinu |
+| jak dlouho je mrtvý | **8–19 min** (medián 15) | ~3 min detekce + ~108 s návrat ≈ **5 min** |
+
+Wallbox se sice nakonec vzpamatuje sám — ale až po čtvrthodině. Watchdog zkrátí
+výpadek zhruba na třetinu. Nezabere na druhou poruchu, kdy wallbox **odpadne ze
+sítě úplně** (žádné TCP) — tam HA poctivě hlásí `unavailable` a pomůže jen
+fyzický restart.
+
+### Added — `wait` je slepá ulička, když auto proud nevezme
+
+Wallbox `Authorize Start` **vždycky** přijme a session autorizuje → `wait`.
+Když auto nenabíjí (typicky je plné), zůstane to ve `wait` viset — a odtud
+odmítá **Start** (už autorizováno) i **Stop** (session neběží). Z HA není
+východisko, pomůže jen přepojit kabel. Chybová hláška to teď řekne.
+
+Tohle je i skutečné vysvětlení hlášení „Stop mi nejde", od kterého se celý
+vývoj odpíchl.
+
+### Ověřeno na reálném voze (Peugeot e-2008, FW `E3P3_H_1.1.1_R5190`)
+
+- **Plný cyklus** `charging → Stop → finish → Start → wait → charging`, 2× po
+  sobě, ACK do 0,3–0,4 s, výkon 7,6 kW → 0 → 10,7 kW.
+- **PnC přepínač** za provozu (nabíjení to neshodí, jak se dalo čekat).
+- **Zámek** oběma směry, včetně té zrádné inverze proti `binary_sensor`.
+- **Můstek** vrátil zamrzlý link do ~40 s tam, kde dřív nepomohl ani reload.
+
+### Známá omezení (vědomá, ne opomenutá)
+
+- **Posunutí slideru „nabíjecí proud" spustí nabíjení.** `Authorize Start`
+  zakládá session a wallbox jinou páku na proud nemá. S vypnutým PnC je to
+  naopak jediná cesta, jak nabíjení z HA rozjet. V automatizaci vždy nejdřív
+  ověř `power > 1 kW`.
+- **Force-charge ze sítě integrace neumí.**
+- `LoadBalance` zůstává statický na 14 600 W — je to jen building-level strop
+  a wallbox si ho stejně resetuje zpět.
+- Po zásahu watchdogu se wallbox obvykle vrátí do ~108 s, ale výjimečně to
+  trvalo ~19 min. Příčina neznámá.
+
 ## [0.7.3] — 2026-07-16
 
 Plný cyklus konečně otestován **na reálném nabíjejícím voze** (Peugeot e-2008,

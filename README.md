@@ -90,20 +90,27 @@ Výrobce ho nikde nedokumentuje — tohle je poskládané z pozorování na FW
 | Stav | Význam |
 |---|---|
 | `idle` | kabel odpojený, nic neběží |
-| `wait` | **přechodně** po `Authorize Start`, než auto začne brát proud (~4 s) |
+| `wait` | autorizováno, wallbox čeká, až auto začne brát proud |
 | `charging` | reálně nabíjí |
 | `finish` | **session skončila, ale kabel zůstal v zásuvce** — po Stopu i když session ukončí samo auto (limit SoC) |
 
-**Ověřený stavový automat** (2026-07-16, plný cyklus 2× po sobě na reálném voze):
+**Ověřený stavový automat** (2026-07-16/17, plný cyklus 2× po sobě na reálném voze):
 
 ```
-charging --Stop--> finish --Start--> wait --> charging
-   ~4 s              ~4 s
+charging --Stop--> finish --Start--> wait --> charging     auto proud vezme
+   ~4 s              ~4 s              ~4 s
+
+                            finish --Start--> wait ──╳     auto je plné → uvázne
 ```
 
-Start ze stavu `finish` tedy **funguje** — nabíjení jde z HA rozjet znovu, bez
-přepojování kabelu. Když ho wallbox přesto odmítne, stav za to nemůže: nepřijme
-ho **auto**, typicky protože dosáhlo svého limitu SoC.
+Start ze stavu `finish` **funguje** — nabíjení jde z HA rozjet znovu, bez
+přepojování kabelu. **Ale jen když auto nabíjení přijme.**
+
+> **⚠️ `wait` je slepá ulička, když auto proud nevezme.** Wallbox Start vždycky
+> přijme a session autorizuje → `wait`. Když auto nenabíjí (typicky je plné),
+> zůstane to ve `wait` viset — a odtud wallbox odmítá **Start** (už je
+> autorizováno) i **Stop** (session ještě neběží). Z Home Assistanta už s tím
+> nic nesvedeš; pomůže **odpojit a znovu zapojit kabel**. Ověřeno 2026-07-17.
 
 > `finish` je i důvod, proč integrace hlásí stav nabíjení **whitelistem**
 > (`on` jen pro `charging`). Do v0.6.0 se používal blacklist `!= 'idle'`, který

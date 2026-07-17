@@ -25,14 +25,19 @@ DEFAULT_AUTHORIZE_CURRENT = 16
 # WHITELIST záměrně. Pozorovaný slovník (2026-07-16, FW E3P3_H_1.1.1_R5190,
 # poskládaný z hlášení uživatelů — výrobce ho nikde nedokumentuje):
 #   idle      — kabel odpojený, nic neběží
-#   wait      — PŘECHODNĚ po Authorize Start, než auto začne brát proud (~4 s)
+#   wait      — autorizováno, wallbox čeká, až auto začne brát proud.
+#               Když auto vezme → za ~4 s 'charging'. Když NEvezme (je plné),
+#               ⚠️ zůstane to tu viset a wallbox odmítá Start (už autorizováno)
+#               i Stop (session neběží) → z HA není východisko, jen přepojit kabel.
 #   charging  — reálně nabíjí
 #   finish    — session skončila, ale kabel zůstal v zásuvce. Sem se dostaneme
 #               po našem Stopu, i když session ukončí samo auto (limit SoC).
 #
-# Ověřený stavový automat (2026-07-16, plný cyklus 2× po sobě):
-#   charging --Stop--> finish --Start--> wait --> charging
-# Start z 'finish' tedy FUNGUJE. (v0.7.2 tvrdila opak — mylně, viz v0.7.3.)
+# Ověřený stavový automat (2026-07-16/17, plný cyklus 2× po sobě):
+#   charging --Stop--> finish --Start--> wait --> charging      (auto proud vezme)
+#                                        wait --> (uvázne)      (auto plné)
+# Start z 'finish' tedy FUNGUJE — ale jen když auto nabíjení přijme.
+# (v0.7.2 tvrdila, že nefunguje vůbec — mylně, viz v0.7.3.)
 #
 # Do whitelistu patří jen `charging`. `finish` je přesně ten stav, kvůli
 # kterému v0.6.0 padala: blacklist `!= 'idle'` ho hlásil jako „nabíjím",
@@ -182,6 +187,15 @@ class SchargeChargingSwitch(SchargeEntity, SwitchEntity):
     def _reject_hint(self, purpose: str) -> str:
         """Rada podle stavu — obecné „nedává to smysl" uživateli nepomůže."""
         status = (self._charge_status or "").strip().lower()
+        if status == "wait":
+            # Ověřeno 2026-07-17: ve 'wait' wallbox odmítá Start (už je
+            # autorizováno) i Stop (session ještě neběží) → z HA není východisko.
+            return (
+                "Nabíjení je autorizované a wallbox čeká, až auto začne brát proud. "
+                "Když ho auto nevezme (typicky je plné), zůstane to viset tady — "
+                "a ve stavu 'wait' wallbox odmítá Start i Stop, takže z Home "
+                "Assistanta už s tím nic nesvedeš. Pomůže odpojit a znovu zapojit kabel."
+            )
         if status == "finish":
             # 'finish' = session skončila, kabel zůstal v zásuvce. Start z tohoto stavu
             # NORMÁLNĚ FUNGUJE (ověřeno 2026-07-16: finish → wait → charging, opakovaně).
