@@ -312,6 +312,35 @@ vlastní (výkon FVE, spotřeba domu, výkon na bodě připojení / grid).
 > baterie při nízkém SOC, strop výstupu střídače) — nejpřísnější krok vítězí.
 > Viz princip „nejnižší delta vyhrává" u feedback regulátoru.
 
+## FAQ
+
+### Umí integrace číst SoC (stav nabití) baterie auta?
+
+**Ne — a nejde to.** Není to nedodělek integrace: wallbox tu informaci sám nemá.
+
+Ověřeno strojově ze zachycené komunikace — **všech 64 unikátních polí** protokolu
+obsahuje výhradně elektrické veličiny na straně wallboxu (`voltage`, `current`,
+`power`, `electricWork`, `chargingTime`) a stavy konektoru. Nic o voze.
+
+Důvod je ve standardu:
+
+| | AC wallbox | DC rychlonabíječka |
+|---|---|---|
+| standard | **IEC 61851** | DIN 70121 / ISO 15118 |
+| komunikace s autem | analogový **PWM** na Control Pilot | plná digitální (IP přes PLC) |
+| co se přenáší | **jen max. proud** + stav konektoru | vč. SoC a kapacity baterie |
+
+Proto **veřejné rychlonabíječky SoC ukazují** — jsou DC (CCS), kde je digitální
+komunikace povinná. U AC by to vyžadovalo **ISO 15118** (skutečné Plug & Charge)
+s PLC modemem na obou stranách; `JNT-EVCD2` ho nemá.
+
+> ⚠️ Entity s „PnC" v názvu **nejsou ISO 15118** — je to jen autorizace bez RFID karty.
+
+**Řešení: SoC z cloudu výrobce auta.** Například `psa_car_controller` (Stellantis —
+Peugeot / Citroën / Opel / DS), `kia_uvo`, `bmw_connected_drive`, `tesla_custom`,
+`renault`. Kombinace *SoC z cloudu auta + řízení proudu z této integrace* funguje
+dobře — regulační smyčka pak může být podmíněná skutečným stavem baterie.
+
 ## Changelog
 
 Kompletní historie změn: viz [CHANGELOG.md](CHANGELOG.md).
