@@ -183,6 +183,12 @@ class SchargeChargingSwitch(SchargeEntity, SwitchEntity):
                 f"Aktuální stav konektoru: {self._charge_status!r}. "
                 + self._reject_hint(purpose)
             )
+        started = purpose == "Start"
+        self._optimistic = started
+        # Start: drž `on` přes fázi `wait`, než auto začne brát proud.
+        # Stop: dobu hájení zahoď, ať switch může hned spadnout na off.
+        self._starting_until = (time.monotonic() + _STARTING_GRACE) if started else None
+        self.async_write_ha_state()
 
     def _reject_hint(self, purpose: str) -> str:
         """Rada podle stavu — obecné „nedává to smysl" uživateli nepomůže."""
@@ -212,12 +218,6 @@ class SchargeChargingSwitch(SchargeEntity, SwitchEntity):
             return "Už se nabíjí, Start je zbytečný. Proud měň sliderem „nabíjecí proud“."
         return ("Wallbox příkaz přijme jen ve stavu, kdy dává smysl: Stop když session "
                 "běží, Start když ji lze založit.")
-        started = purpose == "Start"
-        self._optimistic = started
-        # Start: drž `on` přes fázi `wait`, než auto začne brát proud.
-        # Stop: dobu hájení zahoď, ať switch může hned spadnout na off.
-        self._starting_until = (time.monotonic() + _STARTING_GRACE) if started else None
-        self.async_write_ha_state()
 
     async def async_turn_on(self, **kwargs) -> None:
         _LOGGER.info("Charging switch ON — konektor %d", self._connector_id)

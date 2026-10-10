@@ -26,10 +26,14 @@ ACK_TIMEOUT = 5.0
 # hlásí connected=True a tiše servíruje zastaralé hodnoty. Pozorováno naživo
 # 2026-07-16: link byl mrtvý 101 minut, auto celou dobu nabíjelo a regulační
 # automatika jela na 100 minut starých číslech. Nic na to neupozornilo.
-WATCHDOG_INTERVAL = 60.0     # s — jak často kontrolovat
-WATCHDOG_STALE = 180.0       # s — bez jediné zprávy = mrtvý link
-                             # (wallbox běžně posílá SynchroData á ~5 s,
-                             #  takže 3 min ticha je s velkou rezervou)
+#
+# Práh podle měření 2026-10-10 (12 h telemetrie, 8 745 vzorků napětí konektoru):
+# medián mezery 3,9 s, 99 % do 10 s, nejdelší mezera ZDRAVÉHO linku 45 s.
+# Všechny delší mezery byly mrtvé linky (> 180 s). Mezera mezi ZMĚNAMI napětí
+# je navíc horní odhad mezery mezi zprávami. 60 s tedy mrtvý link pozná
+# spolehlivě a o ~2,5 min dřív než původních 180 s (detekce 60–75 s místo 3–4 min).
+WATCHDOG_INTERVAL = 15.0     # s — jak často kontrolovat
+WATCHDOG_STALE = 60.0        # s — bez jediné zprávy = mrtvý link
 WATCHDOG_COOLDOWN = 300.0    # s — minimum mezi dvěma zásahy, ať se watchdog
                              # nezacyklí, když je wallbox opravdu pryč
 

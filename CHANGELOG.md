@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] — 2026-10-10
+
+Opravná verze po třech měsících ostrého provozu. Bez změn entit a nastavení,
+stačí aktualizovat a restartovat Home Assistant.
+
+### Fixed — přepínač „Nabíjení" po Startu hned spadl zpátky na off
+
+Od v0.7.2 se po potvrzeném Startu nezapínala doba hájení (60 s), která má držet
+přepínač na `on`, dokud auto nezačne brát proud (stav `wait`, obvykle ~4 s).
+Přepínač tak po stisknutí cvakl zpět na off — a vypadalo to, že Start nezabral,
+i když wallbox nabíjení rozjel. Příčina: při úpravě ve v0.7.2 se kus kódu ocitl
+za `return` a nikdy se neprovedl. Teď to hlídá test.
+
+### Changed — watchdog pozná mrtvý link o ~2,5 minuty dřív
+
+Práh ticha snížen ze 180 s na **60 s**, kontrola á 15 s místo á 60 s. Detekce
+mrtvého linku tak trvá **60–75 s místo 3–4 min**, a o tolik kratší je doba, kdy
+HA ukazuje zastaralá čísla (a kdy podle nich případně řídí proud).
+
+Podloženo měřením 12 h provozu (8 745 vzorků napětí): medián mezery mezi
+vzorky 3,9 s, 99 % do 10 s, nejdelší mezera **zdravého** linku 45 s. Všechny
+delší mezery byly skutečné výpadky (> 180 s), takže 60 s falešně nezasáhne.
+
+### Fixed — varování „WS server close timeout — forcing down" při každém zásahu
+
+Watchdog se mrtvé spojení snažil zavřít slušně a čekal na odpověď, která na
+mrtvém linku nepřijde. Spojení pak viselo, dokud nevypršel TCP timeout.
+Teď ho utne rovnou (stejně tak starou session, kterou wallbox opustí při
+novém připojení). Zásah watchdogu je tak v logu jen jedna hláška a zotavení
+je o ~5 s rychlejší.
+
+### Fixed — IP wallboxu z nastavení přestala platit
+
+Wallbox dostává IP z DHCP. Když se změnila, integrace dál posílala záložní
+(unicast) discovery na starou adresu. Nebylo to vidět, protože jde i broadcast.
+Integrace teď převezme skutečnou IP z příchozího spojení wallboxu a uloží ji
+i do nastavení (v logu jednou INFO „aktualizuji IP").
+
 ## [1.0.0] — 2026-07-17
 
 **První běžný release — konec prereleasů.** HACS ho od teď nabídne normálně,

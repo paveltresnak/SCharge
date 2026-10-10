@@ -25,6 +25,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import (
     ACK_TIMEOUT,
+    CONF_HOST,
     WATCHDOG_COOLDOWN,
     WATCHDOG_INTERVAL,
     WATCHDOG_STALE,
@@ -170,6 +171,10 @@ class SchargeCoordinator:
             subprotocols=[WS_SUBPROTOCOL],
             ping_interval=None,   # wallbox nepodporuje WS ping
             ping_timeout=None,
+            # Wallbox na close frame neodpovídá, takže každé zavření čekalo
+            # výchozích 10 s a _stop_ws_server (timeout 3 s) pokaždé hlásil
+            # „close timeout". 2 s stačí: když neodpoví hned, neodpoví vůbec.
+            close_timeout=2,
         )
         _LOGGER.info("WS server listening on 0.0.0.0:%d", self.ws_port)
 
@@ -252,10 +257,10 @@ class SchargeCoordinator:
         """
         await self._stop_broadcast_task()
         if self._ws is not None:
-            try:
-                await asyncio.wait_for(self._ws.close(), timeout=2)
-            except (asyncio.TimeoutError, Exception) as e:
-                _LOGGER.debug("WS close při zotavení: %s", e)
+            # Link je mrtvý, slušné zavření by jen čekalo na odpověď, která
+            # nepřijde. Utnout TCP rovnou — jinak spojení visí v serveru až do
+            # TCP timeoutu a zdržuje i jeho zastavení.
+            self._abort(self._ws)
             self._ws = None
         await self._stop_ws_server()
         self._fail_pending_acks("link recycled by watchdog")
@@ -267,6 +272,13 @@ class SchargeCoordinator:
         await self._start_ws_server()
         self._start_broadcast_task()
         _LOGGER.info("Link restartován, čekám na návrat wallboxu")
+
+    @staticmethod
+    def _abort(websocket) -> None:
+        """Okamžitě zavřít TCP spojení bez WS close handshaku."""
+        transport = getattr(websocket, "transport", None)
+        if transport is not None:
+            transport.abort()
 
     # ─── Bridge enable/disable (pro sdílení wallboxu s mobilní app) ─────────
 
@@ -433,13 +445,20 @@ class SchargeCoordinator:
         _LOGGER.info("WS connect from %s path=%s subprotocol=%s",
                      peer, path, websocket.subprotocol)
 
-        # Pokud už máme aktivní session, starou zahodíme.
-        # DEBUG úroveň — reconnect je normální chování wallboxu (každých ~10-15 min).
+        # Pokud už máme aktivní session, starou zahodíme — a utneme, protože
+        # wallbox ji sám nezavře a visela by v serveru až do TCP timeoutu.
+        # DEBUG úroveň — reconnect je normální chování wallboxu.
         if self._ws is not None and self._ws is not websocket:
             _LOGGER.debug("Overwriting existing WS session (normal reconnect)")
+            self._abort(self._ws)
 
         self._ws = websocket
         self.connected = True
+        # Nové spojení je samo o sobě známka života. Bez tohohle by watchdog
+        # počítal stáří od poslední zprávy STARÉ session a mohl by čerstvě
+        # připojený wallbox shodit dřív, než stihne cokoli poslat.
+        self.last_update = time.time()
+        self._learn_host(peer)
         self._notify_entities()
 
         try:
@@ -459,6 +478,26 @@ class SchargeCoordinator:
                 # Nenech příkazy viset do timeoutu — odpověď už nepřijde.
                 self._fail_pending_acks("WS session closed")
                 self._notify_entities()
+
+    def _learn_host(self, peer) -> None:
+        """Převzít IP wallboxu z příchozího WS spojení.
+
+        IP zadaná při instalaci slouží jen pro unicast UDP (záloha, když
+        broadcast neprojde). Wallbox ji ale dostává z DHCP a může se změnit —
+        pak by unicast chodil na cizí adresu a nikdo by si toho nevšiml, dokud
+        nepřestane fungovat broadcast. Skutečnou adresu známe z WS spojení,
+        tak ji uložíme i do nastavení integrace.
+        """
+        ip = peer[0] if isinstance(peer, tuple) and peer else None
+        if not ip or ip == self.host:
+            return
+        _LOGGER.info("Wallbox se připojil z %s (v nastavení %s) — aktualizuji IP",
+                     ip, self.host)
+        self.host = ip
+        entry = self.hass.config_entries.async_get_entry(self.entry_id)
+        if entry is not None:
+            self.hass.config_entries.async_update_entry(
+                entry, data={**entry.data, CONF_HOST: ip})
 
     async def _handle_message(self, raw: str) -> None:
         """Zpracovat jednu přijatou JSON zprávu."""
